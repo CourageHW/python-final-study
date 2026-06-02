@@ -53,10 +53,12 @@
 <aside id="aichat" aria-label="AI 학습 도우미">
   <div class="ai-c-head"><span>🤖 AI 학습 도우미</span>
     <span class="ai-c-actions"><button id="aiChatClear" title="대화 지우기" aria-label="대화 지우기">🗑</button><button id="aiChatClose" aria-label="닫기">✕</button></span></div>
-  <div id="aiModelBar"></div>
   <div id="aiCtxBar"></div>
   <div id="aiThread"></div>
-  <form id="aiForm"><textarea id="aiInput" rows="2" placeholder="파이썬·문제에 대해 물어보세요 (Enter 전송)"></textarea><button id="aiSend" class="btn" type="submit">전송</button></form>
+  <form id="aiForm">
+    <textarea id="aiInput" rows="2" placeholder="파이썬·문제에 대해 물어보세요 (Enter 전송)"></textarea>
+    <div class="ai-compose-bar"><select id="aiModelSel" aria-label="AI 모델 선택"></select><span class="ai-spacer"></span><button id="aiSend" class="btn" type="submit">전송</button></div>
+  </form>
   <div class="ai-c-foot">답변은 AI가 생성하며 부정확할 수 있어요. 해설을 함께 확인하세요.</div>
 </aside>
 

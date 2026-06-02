@@ -1,5 +1,5 @@
 /* 멘토링 파이썬 학습앱 서비스워커 — 오프라인 + 빠른 재방문(stale-while-revalidate) */
-const V = "pyquiz-v2-9";
+const V = "pyquiz-v2-10";
 const ASSETS = ["./", "./index.html", "./style.css", "./app.js", "./data.js"];
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(V).then(c => c.addAll(ASSETS).catch(() => {}))); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k.indexOf("pyquiz-") === 0).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

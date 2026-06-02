@@ -313,12 +313,14 @@ async function sendChat() {
 function initChatPanel() {
   const fab = $("#aiFab"), panel = $("#aichat");
   if (!aiConfigured()) { if (fab) fab.style.display = "none"; if (panel) panel.style.display = "none"; return; }
-  const mb = $("#aiModelBar");
-  if (mb && AI_MODELS.length > 1) {
-    const cur = currentModel();
-    mb.innerHTML = `<label>모델</label><select id="aiModelSel" aria-label="AI 모델 선택">${AI_MODELS.map(m => `<option value="${esc(m.id)}"${m.id === cur ? " selected" : ""}>${esc(m.label)}</option>`).join("")}</select>`;
-    const sel = $("#aiModelSel"); if (sel) sel.onchange = () => { S.model = sel.value; save(); };
-  } else if (mb) mb.innerHTML = "";
+  const sel = $("#aiModelSel");
+  if (sel) {
+    if (AI_MODELS.length > 1) {
+      const cur = currentModel();
+      sel.innerHTML = AI_MODELS.map(m => `<option value="${esc(m.id)}"${m.id === cur ? " selected" : ""}>${esc(m.label)}</option>`).join("");
+      sel.style.display = ""; sel.onchange = () => { S.model = sel.value; save(); };
+    } else sel.style.display = "none";
+  }
   chatRender(); chatCtxBar();
   if (fab) fab.onclick = toggleChat;
   const bg = $("#aichatBg"); if (bg) bg.onclick = closeChat;
