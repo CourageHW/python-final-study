@@ -273,21 +273,42 @@ function chatRender() {
   th.scrollTop = th.scrollHeight;
 }
 function askAboutQuestion(id) { chatCtxId = id; openChat(); chatCtxBar(); const i = $("#aiInput"); if (i) { i.placeholder = "이 문제에 대해 물어보세요"; i.focus(); } }
+let typeTimer = null;
+function stopType() { if (typeTimer) { clearInterval(typeTimer); typeTimer = null; } }
+function typewrite(el, full) {     // AI 홈페이지풍 타자기 렌더(마크다운 점진 렌더)
+  stopType();
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || full.length < 40) { el.innerHTML = mdRender(full); return; }
+  const total = full.length, step = Math.max(2, Math.floor(total / 140)); let pos = 0;
+  const th = $("#aiThread");
+  el.innerHTML = "";
+  typeTimer = setInterval(() => {
+    pos += step;
+    if (pos >= total) { el.innerHTML = mdRender(full); stopType(); }
+    else el.innerHTML = mdRender(full.slice(0, pos)) + '<span class="ai-caret"></span>';
+    if (th) th.scrollTop = th.scrollHeight;
+  }, 14);
+}
 async function sendChat() {
   const inp = $("#aiInput"); if (!inp || chatBusy) return;
   const text = inp.value.trim(); if (!text) return;
   if (!aiConfigured()) { CHAT.push({ role: "assistant", content: "AI 기능이 아직 설정되지 않았습니다(관리자 설정 필요)." }); chatRender(); return; }
+  stopType();
   CHAT.push({ role: "user", content: text }); inp.value = ""; chatRender();
   chatBusy = true; const sb = $("#aiSend"); if (sb) sb.disabled = true;
-  const th = $("#aiThread"); const wait = document.createElement("div"); wait.className = "ai-msg assistant pending"; wait.textContent = "…"; if (th) { th.appendChild(wait); th.scrollTop = th.scrollHeight; }
+  const th = $("#aiThread"); const wait = document.createElement("div"); wait.className = "ai-msg assistant pending"; wait.innerHTML = '<span class="ai-typing"><i></i><i></i><i></i></span>'; if (th) { th.appendChild(wait); th.scrollTop = th.scrollHeight; }
   const sys = [{ role: "system", content: CHAT_SYS }];
   if (chatCtxId) { const q = qById(chatCtxId); if (q) { const solved = !!(S.prog[chatCtxId] && S.prog[chatCtxId].status); sys.push({ role: "system", content: "[학생이 보고 있는 문제]\n" + qContext(q, solved) }); } }
   let hist = CHAT.slice(-12); while (hist.length && hist[0].role === "assistant") hist.shift();   // Gemini는 contents가 user로 시작해야 함
+  let animate = false;
   try {
     const r = await aiChat(sys.concat(hist));
-    CHAT.push({ role: "assistant", content: r });
+    CHAT.push({ role: "assistant", content: r }); animate = true;
   } catch (e) { CHAT.push({ role: "assistant", content: "⚠ " + String((e && e.message) || e) }); }
-  finally { chatBusy = false; if (sb) sb.disabled = false; chatRender(); }
+  finally {
+    chatBusy = false; if (sb) sb.disabled = false; chatRender();
+    if (animate) { const bs = th ? th.querySelectorAll(".ai-msg.assistant") : []; const last = bs[bs.length - 1]; if (last) typewrite(last, CHAT[CHAT.length - 1].content); }
+  }
 }
 function initChatPanel() {
   const fab = $("#aiFab"), panel = $("#aichat");
@@ -302,7 +323,7 @@ function initChatPanel() {
   if (fab) fab.onclick = toggleChat;
   const bg = $("#aichatBg"); if (bg) bg.onclick = closeChat;
   const cl = $("#aiChatClose"); if (cl) cl.onclick = closeChat;
-  const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { CHAT = []; chatCtxId = null; chatRender(); chatCtxBar(); };
+  const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { stopType(); CHAT = []; chatCtxId = null; chatRender(); chatCtxBar(); };
   const form = $("#aiForm"); if (form) form.onsubmit = e => { e.preventDefault(); sendChat(); };
   const inp = $("#aiInput"); if (inp) inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
 }
