@@ -411,7 +411,7 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 #aiFab:hover{background:var(--accent2)}
 #aichatBg{position:fixed;inset:0;z-index:45;background:rgba(15,23,42,.45);backdrop-filter:blur(2px)}
 #aichat{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.98);z-index:46;
-  width:min(780px,94vw);height:min(84vh,880px);background:var(--panel);border:1px solid var(--line);
+  width:min(980px,96vw);height:min(90vh,1040px);background:var(--panel);border:1px solid var(--line);
   border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
 #aichat.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
