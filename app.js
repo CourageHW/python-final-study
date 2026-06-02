@@ -111,7 +111,7 @@ let widgetSeq = 0; const ANIM = {};
 function codeWidget(lines, trace) {
   const id = "cw" + (widgetSeq++);
   const lh = lines.map((l, k) => `<span class="ln" data-l="${k + 1}">${hi(l)}</span>`).join("");
-  const playBtn = trace ? `<button class="play" data-cw="${id}">▶ 단계별 실행</button>` : "";
+  const playBtn = trace ? `<button class="play" data-cw="${id}">▶ 한 줄씩 실행 보기</button>` : "";
   const anim = trace ? `
     <div class="anim" id="${id}-anim">
       <div class="pane"><h5>변수 상태</h5><div class="vars" id="${id}-vars"><span class="nochg">실행 전</span></div></div>
@@ -238,6 +238,7 @@ async function runWhyWrong(btn) {
 
 /* ---------- 🎤 음성 입력 (Web Speech API) ---------- */
 let recog = null, recoging = false, recogBase = "";
+function stopVoice() { try { if (recog && recoging) recog.stop(); } catch (e) {} recoging = false; const b = $("#aiVoiceBtn"); if (b) b.classList.remove("on"); }
 function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = $("#aiVoiceBtn"); if (!btn) return;
@@ -297,7 +298,7 @@ function renderAiSettings() {
   }
 }
 function openChat() { const p = $("#aichat"), bg = $("#aichatBg"); if (p) { p.classList.add("open"); if (bg) bg.hidden = false; const i = $("#aiInput"); if (i) i.focus(); } }
-function closeChat() { const p = $("#aichat"), bg = $("#aichatBg"); if (p) p.classList.remove("open"); if (bg) bg.hidden = true; }
+function closeChat() { const p = $("#aichat"), bg = $("#aichatBg"); if (p) p.classList.remove("open"); if (bg) bg.hidden = true; stopVoice(); }
 function toggleChat() { const p = $("#aichat"); if (p && p.classList.contains("open")) closeChat(); else openChat(); }
 function chatCtxBar() {
   const bar = $("#aiCtxBar"); if (!bar) return;
@@ -390,7 +391,7 @@ async function sendChat() {
   chatBusy = true; const sb = $("#aiSend"); if (sb) sb.disabled = true;
   const th = $("#aiThread"); const wait = document.createElement("div"); wait.className = "ai-msg assistant pending"; wait.innerHTML = '<span class="ai-typing"><i></i><i></i><i></i></span>'; if (th) { th.appendChild(wait); th.scrollTop = th.scrollHeight; }
   const sys = [{ role: "system", content: CHAT_SYS }];
-  if (chatCtxId) { const q = qById(chatCtxId); if (q) { const solved = !!(S.prog[chatCtxId] && S.prog[chatCtxId].status); sys.push({ role: "system", content: "[학생이 보고 있는 문제]\n" + qContext(q, solved) }); } }
+  if (chatCtxId) { const q = qById(chatCtxId); if (q) { const cEl = document.getElementById("q-" + chatCtxId); const solved = cEl ? cEl.classList.contains("done") : !!(S.prog[chatCtxId] && S.prog[chatCtxId].status); sys.push({ role: "system", content: "[학생이 보고 있는 문제]\n" + qContext(q, solved) }); } }   // 현재 카드가 공개(done)됐을 때만 정답 포함 — 복습/세션 재풀이 중 유출 방지
   let hist = CHAT.slice(-12); while (hist.length && hist[0].role === "assistant") hist.shift();   // Gemini는 contents가 user로 시작해야 함
   hist = hist.map(m => ({ role: m.role, content: m.content }));   // 이미지 등 부가필드 제외(현재 이미지는 아래 extra로만 전송)
   const extra = { temp: S.temp };   // 프록시가 Gemini/DeepSeek에만 적용(GPT-5는 무시)
@@ -429,7 +430,7 @@ function initChatPanel() {
   if (fab) fab.onclick = toggleChat;
   const bg = $("#aichatBg"); if (bg) bg.onclick = closeChat;
   const cl = $("#aiChatClose"); if (cl) cl.onclick = closeChat;
-  const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { stopType(); CHAT = []; chatCtxId = null; setPendingImage(null); chatRender(); chatCtxBar(); };
+  const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { stopType(); stopVoice(); CHAT = []; chatCtxId = null; setPendingImage(null); chatRender(); chatCtxBar(); };
   const form = $("#aiForm"); if (form) form.onsubmit = e => { e.preventDefault(); sendChat(); };
   const inp = $("#aiInput"); if (inp) {
     inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
@@ -477,10 +478,11 @@ function cardHTML(q) {
     <div class="codeslot"></div>
     ${q.sec === "obj" ? `<div class="confrow" data-conf-for="${q.id}"><span class="conf-label">확신도</span>
       <button class="confchip" data-conf="sure">😎 확실</button><button class="confchip on" data-conf="mid">🙂 보통</button><button class="confchip" data-conf="guess">🤔 찍음</button></div>` : ""}
-    <div class="selfexpl">
-      <textarea data-expl="${q.id}" rows="2" placeholder="✍️ (선택) 왜 이게 답일지 / 어떻게 풀지 먼저 설명해보세요">${esc(S.expl[q.id] || "")}</textarea>
+    <details class="selfexpl"${S.expl[q.id] ? " open" : ""}>
+      <summary>✍️ 풀이 설명${aiConfigured() ? " · AI 피드백" : ""}</summary>
+      <textarea data-expl="${q.id}" rows="2" placeholder="왜 이게 답일지 / 어떻게 풀지 적어보세요">${esc(S.expl[q.id] || "")}</textarea>
       ${aiConfigured() ? `<div class="expl-tools"><button class="btn sm aifb" data-aifb="${q.id}">🤖 AI 피드백</button></div>` : ""}
-      <div class="ai-out" data-aiout="${q.id}"></div></div>
+      <div class="ai-out" data-aiout="${q.id}"></div></details>
     ${q.sec === "obj" ? `<ul class="opts">${opts}</ul>` :
       `<div class="subans"><input type="text" placeholder="답을 입력…" data-sub="${q.id}"><button class="btn sm" data-subchk="${q.id}">확인</button><button class="reveal-btn sm" data-subhint="${q.id}">💡 힌트</button><div class="hintbox" data-hintbox="${q.id}"></div></div>`}
     <div class="ansslot"></div>
@@ -1305,6 +1307,28 @@ $("#themeBtn").onclick = () => { S.theme = S.theme === "dark" ? "light" : "dark"
 $("#resetBtn").onclick = () => { if (confirm("진도·정오답·북마크 기록을 모두 지울까요? (되돌릴 수 없습니다)")) { S.prog = {}; S.bm = {}; save(); render(); toast("기록을 초기화했습니다"); } };
 function applyTheme() { document.documentElement.setAttribute("data-theme", S.theme); $("#themeBtn").textContent = S.theme === "dark" ? "☀️" : "🌙"; }
 
+/* ---------- 👋 첫 방문 30초 안내 ---------- */
+function showIntro() {
+  if (S.seenIntro) return;
+  const ov = document.createElement("div"); ov.className = "intro-ov";
+  ov.innerHTML = `<div class="intro-card">
+    <h2>🐍 파이썬 기말 학습 — 30초 안내</h2>
+    <ul class="intro-list">
+      <li><b>📚 학습</b> — 장·개념별 문제 풀이 + 즉시 채점·해설. 코드 문제는 <b>▶ 한 줄씩 실행 보기</b>로 흐름을 눈으로 확인하세요.</li>
+      <li><b>🔁 복습</b> — 틀리거나 헷갈린 문제가 복습 시점에 자동으로 모입니다(간격 반복).</li>
+      <li><b>🔮 예측</b> — 코드 출력을 먼저 맞혀보는 연습.</li>
+      <li><b>📊 대시보드</b> — 내 약점·시험 준비도·D-day 목표·맞춤 세션·치트시트.</li>
+      <li><b>📝 모의시험</b> — 타이머 모의고사 → 약점 리포트·복습 큐.</li>
+      <li><b>🤖 오른쪽 아래 버튼</b> — 모르면 AI에게 바로 질문(이미지·음성도 가능). 문제 카드의 <b>🤖 질문</b>·<b>🔍 왜 틀렸지</b>도 활용!</li>
+    </ul>
+    <button class="cta" id="introStart">시작하기 🚀</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => { S.seenIntro = true; save(); ov.remove(); };
+  $("#introStart").onclick = close;
+  ov.onclick = e => { if (e.target === ov) close(); };
+}
+
 /* ---------- 초기화 ---------- */
 try {
   applyTheme(); buildChapterFilter();
@@ -1314,6 +1338,7 @@ try {
   syncFilterUI();
   setView(S.view || "learn");
   initChatPanel();
+  showIntro();
 } catch (e) {
   var em = $("#main"); if (em) em.innerHTML = '<div class="empty">⚠ 화면을 그리는 중 오류가 발생했습니다:<br><br><code>' + esc(String((e && e.message) || e)) + '</code><br><br>이 메시지를 캡처해 보내주시면 바로 고쳐드리겠습니다.</div>';
 }

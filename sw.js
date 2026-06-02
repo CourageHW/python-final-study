@@ -1,5 +1,5 @@
 /* 멘토링 파이썬 학습앱 서비스워커 — network-first + no-store(항상 최신, 오프라인은 캐시 폴백) */
-const V = "pyquiz-v3-5";
+const V = "pyquiz-v3-6";
 const ASSETS = ["./", "./index.html", "./style.css", "./app.js", "./data.js"];
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(V).then(c => c.addAll(ASSETS).catch(() => {}))); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k.indexOf("pyquiz-") === 0).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
