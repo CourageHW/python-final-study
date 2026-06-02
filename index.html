@@ -68,7 +68,7 @@
       </div>
       <button type="button" id="aiThinkBtn" class="ai-think-btn" hidden title="DeepSeek 사고(thinking) 모드 켜기/끄기">🧠 사고</button>
       <span class="ai-spacer"></span>
-      <button type="button" id="aiVoiceBtn" class="ai-voice-btn" title="음성 입력(말하기)" aria-label="음성 입력">🎤</button>
+      <button type="button" id="aiVoiceBtn" class="ai-voice-btn" title="음성 입력(말하기)" aria-label="음성 입력"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect class="wv" x="2.4" y="8" width="2.2" height="8" rx="1.1"/><rect class="wv" x="6.9" y="5" width="2.2" height="14" rx="1.1"/><rect class="wv" x="11.4" y="2" width="2.2" height="20" rx="1.1"/><rect class="wv" x="15.9" y="5" width="2.2" height="14" rx="1.1"/><rect class="wv" x="20.4" y="8" width="2.2" height="8" rx="1.1"/></svg></button>
       <button id="aiSend" class="btn" type="submit">전송</button>
     </div>
   </form>
@@ -81,6 +81,7 @@
   window.MENTO_AI_TOKEN = "";   // (선택) 프록시 CLASS_TOKEN을 설정했다면 같은 값
   // 멘티가 고를 수 있는 모델 목록 — 워커의 ALLOWED_MODELS와 일치.
   window.MENTO_AI_MODELS = [{ id: "gpt-5.4-nano", label: "GPT-5.4 nano (OpenAI)" }, { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" }, { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }, { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" }];
+  window.MENTO_AI_DEFAULT = "deepseek-v4-flash";   // 미선택 시 기본 모델(챗봇·왜틀렸지·자기설명 피드백 공통)
 </script>
 <script src="data.js"></script>
 <script src="app.js"></script>

@@ -164,7 +164,14 @@ const AI_PROXY = ((typeof window !== "undefined" && window.MENTO_AI_PROXY) || ""
 const AI_TOKEN = ((typeof window !== "undefined" && window.MENTO_AI_TOKEN) || "").trim();   // (선택) 공유 토큰
 const AI_MODELS = (Array.isArray(typeof window !== "undefined" && window.MENTO_AI_MODELS) ? window.MENTO_AI_MODELS : [])
   .map(m => typeof m === "string" ? { id: m, label: m } : m).filter(m => m && m.id);   // 멘티가 고를 수 있는 모델 목록(없으면 워커 기본값 사용)
-function currentModel() { if (!AI_MODELS.length) return ""; const ids = AI_MODELS.map(m => m.id); return ids.includes(S.model) ? S.model : ids[0]; }
+const AI_DEFAULT = ((typeof window !== "undefined" && window.MENTO_AI_DEFAULT) || "").trim();   // 미선택 시 기본 모델
+function currentModel() {
+  if (!AI_MODELS.length) return "";
+  const ids = AI_MODELS.map(m => m.id);
+  if (ids.includes(S.model)) return S.model;
+  if (AI_DEFAULT && ids.includes(AI_DEFAULT)) return AI_DEFAULT;   // 멘토 지정 기본
+  return ids[0];
+}
 const AI_FMT = " 코드는 반드시 ```python 코드펜스로 감싸라. 수식은 LaTeX($, \\\\(, \\\\[ 등) 대신 일반 텍스트나 백틱 코드로 써라(LaTeX는 렌더되지 않음). 강조는 **굵게**만 사용.";
 const AI_SYS = "너는 파이썬을 가르치는 친절하고 정확한 멘토다. 학생이 한 문제에 대해 '자기설명'(왜 그렇게 푸는지 자기 말로 설명한 글)을 작성했다. 학생의 자기설명만 평가하라: (1) 추론이 맞는지 짚고, (2) 틀렸거나 빠진 핵심·오개념이 있으면 콕 집어 바로잡고, (3) 마지막에 한 줄 격려. 정답을 그대로 받아쓰지 말고 학생의 사고 과정을 다듬는 데 집중하라. 한국어로 3~5문장, 군더더기 없이." + AI_FMT;
 const CHAT_SYS = "너는 파이썬 학습을 돕는 친절한 한국어 튜터다. 학생이 보고 있는 문제 맥락이 주어지면 그 맥락에 맞춰 답하라. 단순히 정답만 던지지 말고 핵심 개념과 풀이 단계를 짚어 스스로 이해하도록 도와라. 코드 예시는 짧게, 설명은 간결하게 한국어로." + AI_FMT;
