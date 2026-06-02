@@ -164,8 +164,9 @@ const AI_TOKEN = ((typeof window !== "undefined" && window.MENTO_AI_TOKEN) || ""
 const AI_MODELS = (Array.isArray(typeof window !== "undefined" && window.MENTO_AI_MODELS) ? window.MENTO_AI_MODELS : [])
   .map(m => typeof m === "string" ? { id: m, label: m } : m).filter(m => m && m.id);   // 멘티가 고를 수 있는 모델 목록(없으면 워커 기본값 사용)
 function currentModel() { if (!AI_MODELS.length) return ""; const ids = AI_MODELS.map(m => m.id); return ids.includes(S.model) ? S.model : ids[0]; }
-const AI_SYS = "너는 파이썬을 가르치는 친절하고 정확한 멘토다. 학생이 한 문제에 대해 '자기설명'(왜 그렇게 푸는지 자기 말로 설명한 글)을 작성했다. 학생의 자기설명만 평가하라: (1) 추론이 맞는지 짚고, (2) 틀렸거나 빠진 핵심·오개념이 있으면 콕 집어 바로잡고, (3) 마지막에 한 줄 격려. 정답을 그대로 받아쓰지 말고 학생의 사고 과정을 다듬는 데 집중하라. 한국어로 3~5문장, 군더더기 없이.";
-const CHAT_SYS = "너는 파이썬 학습을 돕는 친절한 한국어 튜터다. 학생이 보고 있는 문제 맥락이 주어지면 그 맥락에 맞춰 답하라. 단순히 정답만 던지지 말고 핵심 개념과 풀이 단계를 짚어 스스로 이해하도록 도와라. 코드 예시는 짧게, 설명은 간결하게 한국어로.";
+const AI_FMT = " 코드는 반드시 ```python 코드펜스로 감싸라. 수식은 LaTeX($, \\\\(, \\\\[ 등) 대신 일반 텍스트나 백틱 코드로 써라(LaTeX는 렌더되지 않음). 강조는 **굵게**만 사용.";
+const AI_SYS = "너는 파이썬을 가르치는 친절하고 정확한 멘토다. 학생이 한 문제에 대해 '자기설명'(왜 그렇게 푸는지 자기 말로 설명한 글)을 작성했다. 학생의 자기설명만 평가하라: (1) 추론이 맞는지 짚고, (2) 틀렸거나 빠진 핵심·오개념이 있으면 콕 집어 바로잡고, (3) 마지막에 한 줄 격려. 정답을 그대로 받아쓰지 말고 학생의 사고 과정을 다듬는 데 집중하라. 한국어로 3~5문장, 군더더기 없이." + AI_FMT;
+const CHAT_SYS = "너는 파이썬 학습을 돕는 친절한 한국어 튜터다. 학생이 보고 있는 문제 맥락이 주어지면 그 맥락에 맞춰 답하라. 단순히 정답만 던지지 말고 핵심 개념과 풀이 단계를 짚어 스스로 이해하도록 도와라. 코드 예시는 짧게, 설명은 간결하게 한국어로." + AI_FMT;
 function aiConfigured() { return !!AI_PROXY; }
 function stripHtml(h) { const d = document.createElement("div"); d.innerHTML = h || ""; return (d.textContent || "").replace(/\s+/g, " ").trim(); }
 function qContext(q, showAnswer) { // 채팅/피드백에 넣을 문제 요약 (정답은 이미 푼 경우에만 포함 — 미리보기 유출 방지)
@@ -197,7 +198,7 @@ async function runAiFeedback(btn) {
   if (!aiConfigured()) { out.innerHTML = `<div class="ai-note">🤖 AI 기능이 아직 설정되지 않았습니다(관리자 설정 필요).</div>`; return; }
   btn.disabled = true; const old = btn.textContent; btn.textContent = "🤖 생각 중…";
   out.innerHTML = `<div class="ai-note">AI가 설명을 평가하는 중…</div>`;
-  try { const r = await aiChat([{ role: "system", content: AI_SYS }, { role: "user", content: explPrompt(q, expl) }]); out.innerHTML = `<div class="ai-fb"><div class="ai-fb-h">🤖 AI 피드백</div>${esc(r).replace(/\n/g, "<br>")}</div>`; }
+  try { const r = await aiChat([{ role: "system", content: AI_SYS }, { role: "user", content: explPrompt(q, expl) }]); out.innerHTML = `<div class="ai-fb"><div class="ai-fb-h">🤖 AI 피드백</div>${mdLite(r)}</div>`; }
   catch (e) { out.innerHTML = `<div class="ai-err">⚠ ${esc(String((e && e.message) || e))}</div>`; }
   finally { btn.disabled = false; btn.textContent = old; }
 }
@@ -212,10 +213,27 @@ function chatCtxBar() {
   if (chatCtxId) { const q = qById(chatCtxId); bar.innerHTML = `<span class="ctx-chip">📌 제${q.ch}장 ${q.num}번 참고 중 <button id="aiCtxClear" aria-label="문제 맥락 해제">✕</button></span>`; }
   else bar.innerHTML = "";
 }
+function mdLite(raw) {              // AI 출력용 경량·안전 마크다운(먼저 이스케이프 → 부분 렌더)
+  let s = esc(raw);                                  // 1) XSS 방지
+  const blocks = [];
+  s = s.replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g, (m, code) => {   // 2) 펜스 코드블록
+    blocks.push(`<pre class="ai-code">${code.replace(/\n+$/, "")}</pre>`);
+    return `@@CB${blocks.length - 1}@@`;
+  });
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (m, x) => `<code>${x.trim()}</code>`)   // 3) LaTeX 델리미터 제거(렌더 불가)
+       .replace(/\\\(([\s\S]+?)\\\)/g, (m, x) => `<code>${x.trim()}</code>`)
+       .replace(/\$\$([\s\S]+?)\$\$/g, (m, x) => `<code>${x.trim()}</code>`)
+       .replace(/\$([^$\n]*[\\^_{][^$\n]*)\$/g, (m, x) => `<code>${x.trim()}</code>`);  // 단일 $는 수식문자 있을 때만
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>")                          // 4) 인라인 코드
+       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");               //    굵게
+  s = s.replace(/\n/g, "<br>");                                             // 5) 줄바꿈(코드블록 밖)
+  s = s.replace(/@@CB(\d+)@@/g, (m, i) => blocks[+i]);               // 6) 코드블록 복원
+  return s;
+}
 function chatRender() {
   const th = $("#aiThread"); if (!th) return;
   if (!CHAT.length) th.innerHTML = `<div class="ai-c-empty">파이썬·문제에 대해 무엇이든 물어보세요.<br>문제 카드의 <b>🤖 질문</b> 버튼을 누르면 그 문제를 바로 가져옵니다.</div>`;
-  else th.innerHTML = CHAT.map(m => `<div class="ai-msg ${m.role}">${m.role === "assistant" ? esc(m.content).replace(/\n/g, "<br>") : esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
+  else th.innerHTML = CHAT.map(m => `<div class="ai-msg ${m.role}">${m.role === "assistant" ? mdLite(m.content) : esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
   th.scrollTop = th.scrollHeight;
 }
 function askAboutQuestion(id) { chatCtxId = id; openChat(); chatCtxBar(); const i = $("#aiInput"); if (i) { i.placeholder = "이 문제에 대해 물어보세요"; i.focus(); } }

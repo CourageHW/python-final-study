@@ -430,6 +430,12 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 .ai-msg{max-width:88%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.55;white-space:normal;word-break:break-word}
 .ai-msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
 .ai-msg.assistant{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:4px}
+.ai-code{background:var(--code-bg);color:var(--code-ink);border-radius:8px;padding:9px 11px;margin:6px 0;
+  overflow-x:auto;font-family:"Consolas","NanumGothicCoding",monospace;font-size:12.5px;line-height:1.5;white-space:pre}
+.ai-msg code,.ai-fb code{background:var(--chip);color:var(--accent2);padding:1px 5px;border-radius:5px;
+  font-family:"Consolas","NanumGothicCoding",monospace;font-size:.92em;white-space:pre-wrap}
+.ai-msg.user code{background:rgba(255,255,255,.2);color:#fff}
+.ai-msg .ai-code code,.ai-fb .ai-code code{background:none;color:inherit;padding:0}
 .ai-msg.pending{opacity:.6;font-size:18px;letter-spacing:2px}
 #aiForm{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
 #aiInput{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);
