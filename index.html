@@ -16,6 +16,13 @@
   <div id="progwrap"><div id="progbar"></div><span id="progtext"></span></div>
 </header>
 
+<nav id="nav">
+  <button data-view="learn" class="on">📚 학습</button>
+  <button data-view="review">🔁 복습<span id="reviewCount" class="navbadge"></span></button>
+  <button data-view="dashboard">📊 대시보드</button>
+  <button data-view="exam">📝 모의시험</button>
+</nav>
+
 <nav id="filters">
   <div class="frow" id="chapFilter"></div>
   <div class="frow">
@@ -32,6 +39,7 @@
     </div>
     <button id="resetBtn" class="ghost" title="진도·기록 초기화">⟲ 기록 초기화</button>
   </div>
+  <div class="frow" id="conceptFilterRow"></div>
 </nav>
 
 <main id="main"></main>

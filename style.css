@@ -162,3 +162,104 @@ pre.code .ln.errln{background:rgba(248,113,113,.2);border-left-color:#f87171}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty{text-align:center;color:var(--muted);padding:60px 20px;font-size:15px}
 @media(max-width:620px){.anim.show{grid-template-columns:1fr}.topctrl{width:100%}#search{flex:1}}
+
+/* ===== v2: 네비·태그·대시보드·시험 ===== */
+#nav{position:sticky;top:96px;z-index:25;display:flex;gap:4px;background:var(--panel);
+  border-bottom:1px solid var(--line);padding:6px 14px 0;overflow-x:auto}
+#nav button{border:none;background:transparent;color:var(--muted);font-weight:800;font-size:14px;
+  padding:9px 14px;border-bottom:3px solid transparent;white-space:nowrap}
+#nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.navbadge{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;font-size:11px;
+  background:var(--bad);color:#fff;border-radius:9px;vertical-align:top}
+#filters{top:146px}
+
+/* 태그 칩 */
+.tg{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:7px;margin-left:5px}
+.tg.concept{background:var(--chip);color:var(--accent2)}
+.tg.trap{background:#fef3c7;color:#92400e}
+.tg.diff-쉬움{background:#dcfce7;color:#166534}
+.tg.diff-보통{background:#fef9c3;color:#854d0e}
+.tg.diff-어려움{background:#fee2e2;color:#991b1b}
+html[data-theme="dark"] .tg.trap{background:#3a2e0e;color:#fcd34d}
+html[data-theme="dark"] .tg.diff-쉬움{background:#14321f;color:#86efac}
+html[data-theme="dark"] .tg.diff-보통{background:#3a300e;color:#fde047}
+html[data-theme="dark"] .tg.diff-어려움{background:#3a1414;color:#fca5a5}
+
+/* 자신감 입력 / 자가채점 */
+.guess-link{display:inline-block;margin:2px 0 6px;background:none;border:1px dashed var(--line);
+  color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600}
+.guess-done{display:inline-block;margin:2px 0 6px;color:var(--muted);font-size:12.5px;font-weight:700}
+.selfgrade{margin:6px 0;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.autohit{color:var(--ok);font-weight:700}
+
+/* 개념 배너 */
+.concept-banner{background:var(--chip);border:1px solid var(--accent);border-radius:12px;
+  padding:10px 16px;margin-bottom:14px;font-size:15px;display:flex;align-items:center;gap:10px}
+.concept-banner button{margin-left:auto}
+
+/* 복습 */
+.review-head{margin-bottom:14px}
+.rh-title{font-size:18px;font-weight:800;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.rh-title b{color:var(--accent)}
+.rh-sub{color:var(--muted);font-size:13px;margin-top:4px}
+.cram{font-size:13px;font-weight:700;color:var(--bad);cursor:pointer;display:flex;align-items:center;gap:5px}
+
+/* ===== 대시보드 ===== */
+.dash{display:flex;flex-direction:column;gap:14px}
+.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.widget{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.w-label{font-size:13px;font-weight:800;color:var(--muted);margin-bottom:10px;letter-spacing:.02em}
+.w-hint{font-weight:600;color:var(--muted);font-size:11px}
+.muted{color:var(--muted);font-size:13px}
+.cta{display:block;width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;
+  padding:15px;font-size:16px;font-weight:800;cursor:pointer}
+.plan .cta{font-size:17px}
+.kv{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;border-bottom:1px dashed var(--line)}
+.kv:last-child{border:none}
+.kv b{color:var(--accent2)}
+.ready{text-align:center}
+.ready-label{font-size:22px;font-weight:800;margin:4px 0}
+.ready-desc{font-size:12.5px;color:var(--muted)}
+.ready.r0 .ready-label{color:var(--muted)} .ready.r1 .ready-label{color:var(--bad)}
+.ready.r2 .ready-label{color:#d97706} .ready.r3 .ready-label{color:#2563eb} .ready.r4 .ready-label{color:var(--ok)}
+.chrow{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13.5px}
+.chname{width:54px;font-weight:700;flex-shrink:0}
+.chbar{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.chbar i{display:block;height:100%;background:var(--accent)}
+.chnum{width:64px;text-align:right;color:var(--muted);font-size:12px}
+.chacc{width:44px;text-align:right;font-weight:800}
+.chacc.ok{color:var(--ok)} .chacc.warn{color:#d97706} .chacc.bad{color:var(--bad)}
+.weakrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.weakrow:last-child{border:none}
+.wk-name{flex:1;font-weight:700;font-size:14px}
+.wk-acc{font-weight:800}.wk-acc.bad{color:var(--bad)}
+.skrow{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:13px}
+.skrow span:first-child{width:130px;flex-shrink:0}
+.skbar{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.skbar i{display:block;height:100%;background:var(--bad)}
+.sknum{width:26px;text-align:right;font-weight:700;color:var(--bad)}
+.bkbtns{display:flex;gap:8px;margin-top:10px}
+.ghostbtn{background:var(--bg)!important;color:var(--accent)!important;border:1px solid var(--line)!important}
+
+/* ===== 모의시험 ===== */
+.presets{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.preset{background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:15px;font-size:15px;
+  font-weight:800;color:var(--ink);cursor:pointer;text-align:left}
+.preset:hover{border-color:var(--accent);color:var(--accent)}
+.exam-bar{position:sticky;top:140px;z-index:15;display:flex;align-items:center;gap:14px;
+  background:var(--accent2);color:#fff;padding:11px 16px;border-radius:12px;margin-bottom:14px;box-shadow:var(--shadow)}
+.ex-timer{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.ex-timer.urgent{color:#fde047;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.5}}
+.ex-prog{font-size:13px;opacity:.9}.ex-prog b{font-size:16px}
+.exam-bar .btn{margin-left:auto;background:#fff;color:var(--accent2)}
+.exam-card .opt.pick{border-color:var(--accent);background:var(--chip);font-weight:700}
+.flagbtn{background:none;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:12px;color:var(--muted)}
+.flagbtn.on{background:#fef3c7;color:#92400e;border-color:#fbbf24}
+.score-big{font-size:52px;font-weight:900;color:var(--accent);text-align:center;line-height:1.1}
+.score-big span{font-size:20px;color:var(--muted);margin-left:4px}
+.missrow{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);
+  border-radius:9px;padding:9px 12px;margin:6px 0;font-size:13px;color:var(--ink);cursor:pointer}
+.missrow:hover{border-color:var(--accent)}
+.mini-tag{background:var(--chip);color:var(--accent2);padding:1px 6px;border-radius:6px;font-size:11px;font-weight:700}
+@media(max-width:620px){.dash-row{grid-template-columns:1fr}#nav{top:92px}#filters{top:auto}.exam-bar{top:0}}
