@@ -242,7 +242,7 @@ function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = $("#aiVoiceBtn"); if (!btn) return;
   if (!SR) { btn.style.display = "none"; return; }      // 미지원 브라우저
-  recog = new SR(); recog.lang = "ko-KR"; recog.interimResults = true; recog.continuous = false;
+  recog = new SR(); recog.lang = "ko-KR"; recog.interimResults = true; recog.continuous = true;   // 정지 누를 때까지 계속(피드백 유지)
   recog.onresult = e => { let t = ""; for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript; const inp = $("#aiInput"); if (inp) inp.value = (recogBase ? recogBase + " " : "") + t; };
   recog.onend = () => { recoging = false; btn.classList.remove("on"); };
   recog.onerror = () => { recoging = false; btn.classList.remove("on"); };

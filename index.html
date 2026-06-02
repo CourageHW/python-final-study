@@ -88,6 +88,9 @@
 <script>
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  // 새 서비스워커가 제어를 넘겨받으면(배포 갱신) 1회 자동 새로고침 → 항상 최신 화면
+  var _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () { if (_swReloaded) return; _swReloaded = true; location.reload(); });
 }
 </script>
 </body>
