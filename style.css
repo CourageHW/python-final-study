@@ -377,3 +377,72 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 .cmap-name{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmap-frac{color:var(--muted);font-size:11px;font-weight:600}
 .cmap-legend{margin-top:12px}
+
+/* ===== 확신도 칩 ===== */
+.confrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.conf-label{font-size:12px;font-weight:700;color:var(--muted);margin-right:2px}
+.confchip{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:16px;
+  padding:4px 11px;font-size:12.5px;font-weight:700}
+.confchip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card:not(.done) .confchip{cursor:pointer}
+.card.done .confrow{opacity:.6}
+
+/* ===== ✍️ 자기설명 + 🤖 AI 피드백 ===== */
+.selfexpl{margin:0 0 10px}
+.selfexpl textarea{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);color:var(--ink);font-family:inherit;font-size:13.5px;line-height:1.5;resize:vertical;outline:none}
+.selfexpl textarea:focus{border-color:var(--accent)}
+.expl-tools{display:flex;gap:8px;margin-top:6px}
+.card:not(.done) .expl-tools{display:none}     /* 답을 보기 전엔 AI 피드백 숨김(정답 유출 방지) */
+.aifb{background:var(--accent2);color:#fff}
+.ai-out{margin-top:8px}
+.ai-out:empty{margin:0}
+.ai-note{color:var(--muted);font-size:13px;padding:6px 0}
+.ai-fb{background:var(--chip);border:1px solid var(--accent);border-radius:10px;padding:10px 13px;font-size:13.5px;line-height:1.6}
+.ai-fb-h{font-weight:800;color:var(--accent2);margin-bottom:4px;font-size:13px}
+.ai-err{background:var(--badbg);border:1px solid var(--bad);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--bad)}
+
+/* ===== 🤖 AI 질문 버튼 + 채팅 패널 ===== */
+.askbtn{background:var(--chip);color:var(--accent2);border:1px solid var(--line);border-radius:14px;
+  padding:3px 9px;font-size:11.5px;font-weight:700;margin-right:4px;cursor:pointer}
+.askbtn:hover{border-color:var(--accent)}
+#aiFab{position:fixed;right:18px;bottom:20px;z-index:45;width:54px;height:54px;border-radius:50%;
+  border:none;background:var(--accent);color:#fff;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+#aiFab:hover{background:var(--accent2)}
+#aichat{position:fixed;right:0;top:0;bottom:0;width:370px;max-width:92vw;z-index:46;background:var(--panel);
+  border-left:1px solid var(--line);box-shadow:-4px 0 24px rgba(0,0,0,.18);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .25s;}
+#aichat.open{transform:translateX(0)}
+.ai-c-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+  border-bottom:1px solid var(--line);font-weight:800;color:var(--accent2)}
+.ai-c-actions button{background:none;border:none;font-size:16px;cursor:pointer;margin-left:8px;color:var(--muted)}
+#aiModelBar{display:flex;align-items:center;gap:8px;padding:8px 14px 0}
+#aiModelBar:empty{padding:0}
+#aiModelBar label{font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0}
+#aiModelBar select{flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12.5px}
+#aiCtxBar{padding:0 14px}
+#aiCtxBar:empty{padding:0}
+.ctx-chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);color:var(--accent2);
+  border:1px solid var(--accent);border-radius:14px;padding:4px 10px;font-size:12px;font-weight:700;margin-top:10px}
+.ctx-chip button{background:none;border:none;color:var(--accent2);cursor:pointer;font-size:12px}
+#aiThread{flex:1;overflow-y:auto;padding:14px 14px 4px;display:flex;flex-direction:column;gap:9px}
+.ai-c-empty{color:var(--muted);font-size:13px;text-align:center;margin:auto;line-height:1.7}
+.ai-msg{max-width:88%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.55;white-space:normal;word-break:break-word}
+.ai-msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.ai-msg.assistant{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:4px}
+.ai-msg.pending{opacity:.6;font-size:18px;letter-spacing:2px}
+#aiForm{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+#aiInput{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);
+  color:var(--ink);font-family:inherit;font-size:13.5px;resize:none;outline:none}
+#aiInput:focus{border-color:var(--accent)}
+#aiSend{align-self:flex-end}
+.ai-c-foot{padding:0 14px 12px;font-size:11px;color:var(--muted)}
+@media(max-width:620px){#aichat{width:100vw}#aiFab{right:14px;bottom:14px}}
+@media print{#aiFab,#aichat{display:none !important}}
+
+/* ===== 🗓️ D-day 플래너 / 과신 큐 ===== */
+.dday{font-size:30px;font-weight:900;color:var(--accent);line-height:1.1}
+.plan-cta{margin:10px 0 6px}
+.plan-set{display:flex;gap:8px;align-items:center;margin-top:8px}
+.plan-set input[type=date]{padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
+.over-head{margin:12px 0 6px;font-weight:800;color:var(--bad);font-size:13.5px}

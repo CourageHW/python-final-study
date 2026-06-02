@@ -46,6 +46,26 @@
 <main id="main"></main>
 
 <div id="toast"></div>
+
+<!-- 🤖 AI 도우미 (서버리스 프록시 경유 — 멘티는 키 입력 없음) -->
+<button id="aiFab" aria-label="AI 도우미 열기" title="AI 도우미">🤖</button>
+<aside id="aichat" aria-label="AI 학습 도우미">
+  <div class="ai-c-head"><span>🤖 AI 학습 도우미</span>
+    <span class="ai-c-actions"><button id="aiChatClear" title="대화 지우기" aria-label="대화 지우기">🗑</button><button id="aiChatClose" aria-label="닫기">✕</button></span></div>
+  <div id="aiModelBar"></div>
+  <div id="aiCtxBar"></div>
+  <div id="aiThread"></div>
+  <form id="aiForm"><textarea id="aiInput" rows="2" placeholder="파이썬·문제에 대해 물어보세요 (Enter 전송)"></textarea><button id="aiSend" class="btn" type="submit">전송</button></form>
+  <div class="ai-c-foot">답변은 AI가 생성하며 부정확할 수 있어요. 해설을 함께 확인하세요.</div>
+</aside>
+
+<!-- 관리자(멘토) 설정: 아래 따옴표 안에 배포한 프록시 워커 주소를 넣으세요. (proxy/README.md 참고) -->
+<script>
+  window.MENTO_AI_PROXY = "https://mento-ai-one.vercel.app/api/ai";
+  window.MENTO_AI_TOKEN = "";   // (선택) 프록시 CLASS_TOKEN을 설정했다면 같은 값
+  // 멘티가 고를 수 있는 모델 목록 — 워커의 ALLOWED_MODELS와 일치.
+  window.MENTO_AI_MODELS = [{ id: "gpt-5.4-nano", label: "GPT-5.4 nano (OpenAI)" }, { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" }];
+</script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 <script>

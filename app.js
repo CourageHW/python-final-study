@@ -12,7 +12,7 @@ const chMap = {}; CH.forEach(c => chMap[c.ch] = c);
 const qById = id => QS.find(q => q.id === id);
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-const esc = s => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = s => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 /* ---------- 상태 (localStorage) ---------- */
 const KEY = "pyquiz_v2";
@@ -22,6 +22,10 @@ try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (
 try { if (!localStorage.getItem(KEY)) { const v1 = JSON.parse(localStorage.getItem("pyquiz_v1") || "{}");
   if (v1.prog) { S.prog = v1.prog; S.bm = v1.bm || {}; S.theme = v1.theme || "light"; } } } catch (e) {}
 S.prog = S.prog || {}; S.bm = S.bm || {}; S.activity = S.activity || {};
+S.expl = S.expl || {};                                  // 문항별 자기설명 텍스트
+if (S.ai) { delete S.ai; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }   // (구버전) 클라이언트 키 즉시 영구 삭제 — 이제 키는 서버 프록시에만
+S.examDate = S.examDate || "";                          // 시험일(YYYY-MM-DD) — D-day 플래너
+S.model = S.model || "";                                // 멘티가 고른 AI 모델 id(여러 모델 허용 시)
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const now = () => Date.now();
 function todayStr() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
@@ -40,6 +44,7 @@ function recordAnswer(q, correct, confident, pick) {
   p.attempts = (p.attempts || 0) + 1;
   p.status = correct ? "correct" : "wrong";
   p.pick = pick; p.lastResult = !!correct; p.lastConfidence = !!confident; p.lastAt = now();
+  p.conf = null;                                   // 이번 답의 확신도는 호출부(onPick)가 다시 설정 — 다른 경로의 stale conf 제거(보정 통계 오염 방지)
   if (!correct) { p.box = 1; p.lapses = (p.lapses || 0) + 1; }
   else if (confident) { p.box = Math.min(5, (p.box || 0) + 1); }
   else { p.box = Math.max(1, p.box || 1); }       // 맞았지만 찍음 → 승급 보류
@@ -53,7 +58,7 @@ function recordAnswer(q, correct, confident, pick) {
 }
 function markGuessed(q) {                          // "사실 찍었어요" → 승급 취소 + 즉시 복습
   const p = S.prog[q.id]; if (!p) return;
-  p.lastConfidence = false; p.box = Math.max(1, (p.box || 1) - 1);
+  p.lastConfidence = false; p.conf = "guess"; p.box = Math.max(1, (p.box || 1) - 1);
   if (p.attempts <= 1) p.firstTry = false;         // 찍어서 맞힌 건 첫시도 정답으로 치지 않음
   p.dueAt = now(); save();                          // 약속대로 바로 복습 큐에
 }
@@ -153,6 +158,100 @@ function enhanceBlocks(container, blocks) {
   $$(".codeblk", container).forEach(div => { const cb = blocks && blocks[+div.dataset.i]; if (cb) div.replaceWith(codeWidget(cb.display, cb.trace)); });
 }
 
+/* ---------- 🤖 AI 도우미 (서버리스 프록시 경유 — 멘티는 키 입력 없음) ---------- */
+const AI_PROXY = ((typeof window !== "undefined" && window.MENTO_AI_PROXY) || "").trim();   // 멘토가 index.html에서 설정
+const AI_TOKEN = ((typeof window !== "undefined" && window.MENTO_AI_TOKEN) || "").trim();   // (선택) 공유 토큰
+const AI_MODELS = (Array.isArray(typeof window !== "undefined" && window.MENTO_AI_MODELS) ? window.MENTO_AI_MODELS : [])
+  .map(m => typeof m === "string" ? { id: m, label: m } : m).filter(m => m && m.id);   // 멘티가 고를 수 있는 모델 목록(없으면 워커 기본값 사용)
+function currentModel() { if (!AI_MODELS.length) return ""; const ids = AI_MODELS.map(m => m.id); return ids.includes(S.model) ? S.model : ids[0]; }
+const AI_SYS = "너는 파이썬을 가르치는 친절하고 정확한 멘토다. 학생이 한 문제에 대해 '자기설명'(왜 그렇게 푸는지 자기 말로 설명한 글)을 작성했다. 학생의 자기설명만 평가하라: (1) 추론이 맞는지 짚고, (2) 틀렸거나 빠진 핵심·오개념이 있으면 콕 집어 바로잡고, (3) 마지막에 한 줄 격려. 정답을 그대로 받아쓰지 말고 학생의 사고 과정을 다듬는 데 집중하라. 한국어로 3~5문장, 군더더기 없이.";
+const CHAT_SYS = "너는 파이썬 학습을 돕는 친절한 한국어 튜터다. 학생이 보고 있는 문제 맥락이 주어지면 그 맥락에 맞춰 답하라. 단순히 정답만 던지지 말고 핵심 개념과 풀이 단계를 짚어 스스로 이해하도록 도와라. 코드 예시는 짧게, 설명은 간결하게 한국어로.";
+function aiConfigured() { return !!AI_PROXY; }
+function stripHtml(h) { const d = document.createElement("div"); d.innerHTML = h || ""; return (d.textContent || "").replace(/\s+/g, " ").trim(); }
+function qContext(q, showAnswer) { // 채팅/피드백에 넣을 문제 요약 (정답은 이미 푼 경우에만 포함 — 미리보기 유출 방지)
+  const opts = q.sec === "obj" ? "\n보기:\n" + q.options.map(o => `${o.m}. ${o.t}`).join("\n") : "";
+  const code = (q.code && q.code.length) ? "\n코드:\n" + q.code.join("\n") : "";
+  const ans = showAnswer ? (q.sec === "obj" ? `정답 ${cheatAnswer(q)}` : `정답 ${q.answerText}`) : "정답 비공개(학생이 아직 푸는 중)";
+  return `제${q.ch}장 ${q.num}번\n${q.stem}${code}${opts}\n(${ans})`;
+}
+function explPrompt(q, userExpl) {
+  const expl = stripHtml(q.explHtml).slice(0, 700);
+  return `[문제]\n${qContext(q, true)}\n[공식 해설 요약]\n${expl}\n\n[학생의 자기설명]\n${userExpl}\n\n위 학생의 자기설명을 평가해줘.`;   // 피드백은 답한 뒤이므로 정답 포함
+}
+async function aiChat(messages) {  // 프록시로 messages 전송 → 응답 텍스트
+  if (!AI_PROXY) throw new Error("AI 도우미가 설정되지 않았습니다(관리자: index.html의 MENTO_AI_PROXY).");
+  const headers = { "Content-Type": "application/json" };
+  if (AI_TOKEN) headers["X-Class-Token"] = AI_TOKEN;
+  const r = await fetch(AI_PROXY, { method: "POST", headers, body: JSON.stringify({ messages, model: currentModel() }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ("프록시 오류 " + r.status));
+  return j.text || "(빈 응답)";
+}
+async function runAiFeedback(btn) {
+  const id = btn.dataset.aifb, q = qById(id), card = btn.closest(".card");
+  if (!card.classList.contains("done")) return;     // 답하기 전엔 피드백 금지(정답 유출 방지 — CSS 게이팅의 JS 백업)
+  const out = $(`[data-aiout="${id}"]`, card), ta = $("[data-expl]", card);
+  const expl = ((ta && ta.value) || "").trim();
+  S.expl[id] = expl; save();
+  if (!expl) { out.innerHTML = `<div class="ai-note">먼저 ✍️ 풀이 근거를 한두 문장 적어주세요.</div>`; return; }
+  if (!aiConfigured()) { out.innerHTML = `<div class="ai-note">🤖 AI 기능이 아직 설정되지 않았습니다(관리자 설정 필요).</div>`; return; }
+  btn.disabled = true; const old = btn.textContent; btn.textContent = "🤖 생각 중…";
+  out.innerHTML = `<div class="ai-note">AI가 설명을 평가하는 중…</div>`;
+  try { const r = await aiChat([{ role: "system", content: AI_SYS }, { role: "user", content: explPrompt(q, expl) }]); out.innerHTML = `<div class="ai-fb"><div class="ai-fb-h">🤖 AI 피드백</div>${esc(r).replace(/\n/g, "<br>")}</div>`; }
+  catch (e) { out.innerHTML = `<div class="ai-err">⚠ ${esc(String((e && e.message) || e))}</div>`; }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+
+/* ---------- 🤖 AI 채팅 패널 (상시 도우미) ---------- */
+let CHAT = [], chatCtxId = null, chatBusy = false;
+function openChat() { const p = $("#aichat"); if (p) { p.classList.add("open"); const i = $("#aiInput"); if (i) i.focus(); } }
+function closeChat() { const p = $("#aichat"); if (p) p.classList.remove("open"); }
+function toggleChat() { const p = $("#aichat"); if (p) { p.classList.toggle("open"); if (p.classList.contains("open")) { const i = $("#aiInput"); if (i) i.focus(); } } }
+function chatCtxBar() {
+  const bar = $("#aiCtxBar"); if (!bar) return;
+  if (chatCtxId) { const q = qById(chatCtxId); bar.innerHTML = `<span class="ctx-chip">📌 제${q.ch}장 ${q.num}번 참고 중 <button id="aiCtxClear" aria-label="문제 맥락 해제">✕</button></span>`; }
+  else bar.innerHTML = "";
+}
+function chatRender() {
+  const th = $("#aiThread"); if (!th) return;
+  if (!CHAT.length) th.innerHTML = `<div class="ai-c-empty">파이썬·문제에 대해 무엇이든 물어보세요.<br>문제 카드의 <b>🤖 질문</b> 버튼을 누르면 그 문제를 바로 가져옵니다.</div>`;
+  else th.innerHTML = CHAT.map(m => `<div class="ai-msg ${m.role}">${m.role === "assistant" ? esc(m.content).replace(/\n/g, "<br>") : esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
+  th.scrollTop = th.scrollHeight;
+}
+function askAboutQuestion(id) { chatCtxId = id; openChat(); chatCtxBar(); const i = $("#aiInput"); if (i) { i.placeholder = "이 문제에 대해 물어보세요"; i.focus(); } }
+async function sendChat() {
+  const inp = $("#aiInput"); if (!inp || chatBusy) return;
+  const text = inp.value.trim(); if (!text) return;
+  if (!aiConfigured()) { CHAT.push({ role: "assistant", content: "AI 기능이 아직 설정되지 않았습니다(관리자 설정 필요)." }); chatRender(); return; }
+  CHAT.push({ role: "user", content: text }); inp.value = ""; chatRender();
+  chatBusy = true; const sb = $("#aiSend"); if (sb) sb.disabled = true;
+  const th = $("#aiThread"); const wait = document.createElement("div"); wait.className = "ai-msg assistant pending"; wait.textContent = "…"; if (th) { th.appendChild(wait); th.scrollTop = th.scrollHeight; }
+  const sys = [{ role: "system", content: CHAT_SYS }];
+  if (chatCtxId) { const q = qById(chatCtxId); if (q) { const solved = !!(S.prog[chatCtxId] && S.prog[chatCtxId].status); sys.push({ role: "system", content: "[학생이 보고 있는 문제]\n" + qContext(q, solved) }); } }
+  let hist = CHAT.slice(-12); while (hist.length && hist[0].role === "assistant") hist.shift();   // Gemini는 contents가 user로 시작해야 함
+  try {
+    const r = await aiChat(sys.concat(hist));
+    CHAT.push({ role: "assistant", content: r });
+  } catch (e) { CHAT.push({ role: "assistant", content: "⚠ " + String((e && e.message) || e) }); }
+  finally { chatBusy = false; if (sb) sb.disabled = false; chatRender(); }
+}
+function initChatPanel() {
+  const fab = $("#aiFab"), panel = $("#aichat");
+  if (!aiConfigured()) { if (fab) fab.style.display = "none"; if (panel) panel.style.display = "none"; return; }
+  const mb = $("#aiModelBar");
+  if (mb && AI_MODELS.length > 1) {
+    const cur = currentModel();
+    mb.innerHTML = `<label>모델</label><select id="aiModelSel" aria-label="AI 모델 선택">${AI_MODELS.map(m => `<option value="${esc(m.id)}"${m.id === cur ? " selected" : ""}>${esc(m.label)}</option>`).join("")}</select>`;
+    const sel = $("#aiModelSel"); if (sel) sel.onchange = () => { S.model = sel.value; save(); };
+  } else if (mb) mb.innerHTML = "";
+  chatRender(); chatCtxBar();
+  if (fab) fab.onclick = toggleChat;
+  const cl = $("#aiChatClose"); if (cl) cl.onclick = closeChat;
+  const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { CHAT = []; chatCtxId = null; chatRender(); chatCtxBar(); };
+  const form = $("#aiForm"); if (form) form.onsubmit = e => { e.preventDefault(); sendChat(); };
+  const inp = $("#aiInput"); if (inp) inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+}
+
 /* ---------- 문제 카드 (학습·복습 공통) ---------- */
 function tagChips(q) {
   let h = "";
@@ -165,11 +264,18 @@ function cardHTML(q) {
   const star = S.bm[q.id] ? "on" : "";
   const badge = q.sec === "sub" ? `<span class="badge sub">주관식</span>` : `<span class="badge">객관식</span>`;
   const opts = q.options.map(o => `<li class="opt" data-m="${esc(o.m)}" role="button" tabindex="0"><span class="m">${esc(o.m)}</span><span>${esc(o.t)}</span></li>`).join("");
+  const ask = aiConfigured() ? `<button class="askbtn" data-ask="${q.id}" title="이 문제 AI에게 질문" aria-label="이 문제 AI에게 질문">🤖 질문</button>` : "";
   return `<div class="card" id="q-${q.id}" data-id="${q.id}">
     <div class="qhead">${badge}<span class="badge">제${q.ch}장 · ${q.num}번</span>${tagChips(q)}<span class="sp"></span>
-      <button class="star ${star}" data-star="${q.id}" title="북마크" aria-label="북마크 토글">★</button></div>
+      ${ask}<button class="star ${star}" data-star="${q.id}" title="북마크" aria-label="북마크 토글">★</button></div>
     <div class="stem">${esc(q.stem)}</div>
     <div class="codeslot"></div>
+    ${q.sec === "obj" ? `<div class="confrow" data-conf-for="${q.id}"><span class="conf-label">확신도</span>
+      <button class="confchip" data-conf="sure">😎 확실</button><button class="confchip on" data-conf="mid">🙂 보통</button><button class="confchip" data-conf="guess">🤔 찍음</button></div>` : ""}
+    <div class="selfexpl">
+      <textarea data-expl="${q.id}" rows="2" placeholder="✍️ (선택) 왜 이게 답일지 / 어떻게 풀지 먼저 설명해보세요">${esc(S.expl[q.id] || "")}</textarea>
+      ${aiConfigured() ? `<div class="expl-tools"><button class="btn sm aifb" data-aifb="${q.id}">🤖 AI 피드백</button></div>` : ""}
+      <div class="ai-out" data-aiout="${q.id}"></div></div>
     ${q.sec === "obj" ? `<ul class="opts">${opts}</ul>` :
       `<div class="subans"><input type="text" placeholder="답을 입력…" data-sub="${q.id}"><button class="btn sm" data-subchk="${q.id}">확인</button><button class="reveal-btn sm" data-subhint="${q.id}">💡 힌트</button><div class="hintbox" data-hintbox="${q.id}"></div></div>`}
     <div class="ansslot"></div>
@@ -229,10 +335,17 @@ function showStudy(card, q) {
     slot.appendChild(explBox(q)); updateProgress(); refreshNav();
   };
 }
+function cardConf(card) {                  // 카드에서 사전 선택한 확신도(없으면 보통)
+  const chip = $(".confrow .confchip.on", card);
+  return (chip && chip.dataset.conf) || "mid";
+}
 function onPick(card, q, m) {
   if (card.classList.contains("done")) return;
   const ok = m === q.answer;
-  recordAnswer(q, ok, ok, m);              // 정답이면 일단 '확신'으로 기록(아래 '찍었어요'로 정정 가능)
+  const level = cardConf(card);            // 답 보기 전에 고른 확신도(확실/보통/찍음)
+  recordAnswer(q, ok, level !== "guess", m); // '찍음'만 비확신 → 박스 승급 보류
+  const p = S.prog[q.id];
+  if (p) { p.conf = level; if (level === "guess") { if (p.attempts <= 1) p.firstTry = false; p.dueAt = now(); } save(); }   // 사전 '찍음' = 사후 markGuessed와 동일 처리(첫시도 정답 인정 X·즉시 복습)
   revealAnswer(card, q, m);
   updateProgress(); refreshNav();
   toast(ok ? "정답! 🎉" : "오답 — 해설을 확인하세요");
@@ -576,6 +689,38 @@ function difficultyHTML() {
   const rows = order.filter(d => dif[d]).map(d => { const e = dif[d], acc = e.c / e.a; const cls = acc >= 0.8 ? "ok" : acc >= 0.5 ? "warn" : "bad"; return `<div class="chrow"><span class="chname">${d}</span><span class="chbar"><i style="width:${Math.round(acc * 100)}%" class="${cls}bar"></i></span><span class="chnum">${e.c}/${e.a}</span><span class="chacc ${cls}">${pct(acc)}</span></div>`; });
   return rows.length ? rows.join("") : `<div class="muted">아직 푼 문제가 없습니다.</div>`;
 }
+function daysUntilExam() { if (!S.examDate) return null; const t = new Date(S.examDate + "T00:00:00").getTime(), today = new Date(todayStr() + "T00:00:00").getTime(); if (isNaN(t)) return null; return Math.round((t - today) / 864e5); }   // 자정 기준 비교(시험 당일=D-0)
+function examPlanHTML() {          // 🗓️ 시험 D-day + 적응형 하루 목표
+  const d = daysUntilExam();
+  if (d === null) return `<div class="muted">시험일을 설정하면 남은 기간에 맞춰 "오늘 풀 양"을 자동으로 계산해 드립니다(분산 학습).</div>
+    <div class="plan-set"><input type="date" id="examDateInput"><button class="btn sm" id="saveExamDate">설정</button></div>`;
+  const unseen = QS.filter(q => !(S.prog[q.id] && S.prog[q.id].status)).length;
+  const due = dueList().length, remaining = unseen + due, daysLeft = Math.max(1, d);
+  const daily = Math.ceil(remaining / daysLeft);
+  const goal = d <= 0 ? remaining : daily;
+  const dlabel = d < 0 ? "시험일이 지났습니다" : d === 0 ? "오늘이 시험! 🔥" : `D-${d}`;
+  return `<div class="dday">${esc(dlabel)}</div><div class="muted">${esc(S.examDate)} 기준 남은 ${Math.max(0, d)}일</div>
+    <div class="kv"><span>안 푼 문제</span><b>${unseen}</b></div>
+    <div class="kv"><span>복습 대기</span><b>${due}</b></div>
+    <div class="kv"><span>오늘 권장 목표</span><b>${goal}문항</b></div>
+    ${remaining ? `<div class="plan-cta"><button class="cta" data-act="session" data-n="${Math.min(40, Math.max(5, goal))}">🎯 오늘 목표만큼 맞춤 세션 시작</button></div>` : `<div class="muted" style="margin-top:8px">🎉 안 푼 문제·복습이 없습니다. 모의시험으로 점검하세요!</div>`}
+    <div class="plan-set"><input type="date" id="examDateInput" value="${esc(S.examDate)}"><button class="btn sm ghostbtn" id="saveExamDate">변경</button></div>`;
+}
+function calibrationHTML() {       // 🎯 확신도 보정 + 과신(확신했는데 틀림) 큐
+  const lv = { sure: { a: 0, c: 0, label: "😎 확실" }, mid: { a: 0, c: 0, label: "🙂 보통" }, guess: { a: 0, c: 0, label: "🤔 찍음" } };
+  QS.forEach(q => { const p = S.prog[q.id]; if (!p || !p.status || !p.conf || !lv[p.conf]) return; lv[p.conf].a++; if (p.lastResult) lv[p.conf].c++; });
+  const anyData = Object.keys(lv).some(k => lv[k].a > 0);
+  let h = anyData ? Object.keys(lv).filter(k => lv[k].a).map(k => { const L = lv[k], acc = L.c / L.a, cls = acc >= 0.8 ? "ok" : acc >= 0.5 ? "warn" : "bad"; return `<div class="chrow"><span class="chname" style="width:64px">${L.label}</span><span class="chbar"><i style="width:${Math.round(acc * 100)}%" class="${cls}bar"></i></span><span class="chnum">${L.c}/${L.a}</span><span class="chacc ${cls}">${pct(acc)}</span></div>`; }).join("")
+    : `<div class="muted">객관식을 풀 때 답 고르기 전에 확신도(확실/보통/찍음)를 선택하면 여기에 "내 확신이 얼마나 정확한지" 보정 그래프가 표시됩니다.</div>`;
+  const over = QS.filter(q => { const p = S.prog[q.id]; return p && p.conf === "sure" && p.lastResult === false; });
+  if (over.length) h += `<div class="over-head">⚠ 확신했는데 틀린 ${over.length}문항 <span class="w-hint">(가장 위험한 오개념 — 최우선 복습)</span></div>` +
+    over.slice(0, 8).map(q => `<button class="missrow" data-review="${q.id}"><span class="badge">제${q.ch}장</span> ${esc(q.stem.slice(0, 44))}… <span class="mini-tag">${esc(q.concept || "")}</span></button>`).join("");
+  return h;
+}
+function aiSettingsHTML() {        // 🤖 AI 도우미 상태(키는 서버 프록시에만 — 멘티 입력 없음)
+  if (aiConfigured()) return `<div class="muted">🤖 AI 도우미가 켜져 있습니다. 문제 카드의 <b>🤖 질문</b> 버튼이나 오른쪽 아래 <b>🤖</b> 버튼으로 언제든 물어보세요. 자기설명을 적고 <b>🤖 AI 피드백</b>도 받을 수 있습니다. <span class="w-hint">(비용은 운영자 계정으로 처리됩니다.)</span></div>`;
+  return `<div class="muted">🤖 AI 도우미가 아직 설정되지 않았습니다. <span class="w-hint">관리자: <code>proxy/README.md</code> 안내대로 프록시를 배포하고 <code>web/index.html</code>의 <code>MENTO_AI_PROXY</code>에 주소를 넣으세요.</span></div>`;
+}
 const MAP_COLS = ["#94a3b8", "#ef4444", "#f59e0b", "#eab308", "#84cc16", "#16a34a"];
 function conceptMapHTML() {       // 🗺️ 개념별 숙련도(평균 Leitner 박스) 지도
   const m = {};
@@ -613,6 +758,7 @@ function renderDashboard() {
   wrap.innerHTML = `
     <div class="widget plan"><div class="w-label">오늘의 학습</div>
       <button class="cta" data-act="${cta.act}" data-concept="${esc(cta.concept || "")}">${cta.txt}</button></div>
+    <div class="widget"><div class="w-label">🗓️ 시험 D-day 플래너 <span class="w-hint">(남은 기간 기반 하루 목표)</span></div>${examPlanHTML()}</div>
     <div class="widget"><div class="w-label">🎯 맞춤 학습 세션 <span class="w-hint">(약점·복습 우선 자동 구성)</span></div>
       <div class="muted">지금 가장 도움이 되는 문제만 모아 짧게 집중 학습합니다.</div>
       <div class="sessbtns">
@@ -651,11 +797,13 @@ function renderDashboard() {
       <div class="widget"><div class="w-label">🎚️ 난이도별 정답률 <span class="w-hint">(첫시도)</span></div>${difficultyHTML()}</div>
     </div>
     <div class="widget"><div class="w-label">🗺️ 개념 지도 <span class="w-hint">(색=숙련도, 클릭하면 집중 학습)</span></div>${conceptMapHTML()}</div>
+    <div class="widget"><div class="w-label">🎯 확신 보정 <span class="w-hint">(내 확신 vs 실제 정답률)</span></div>${calibrationHTML()}</div>
     <div class="widget backup"><div class="w-label">진도 백업</div>
       <div class="muted">진도는 이 브라우저에만 저장됩니다. 기기를 바꾸거나 초기화 전에 백업하세요.</div>
       <div class="bkbtns"><button class="btn sm" id="exportBtn">⬇ 내보내기(.json)</button>
         <button class="btn sm ghostbtn" id="importBtn">⬆ 가져오기</button>
-        <input type="file" id="importFile" accept=".json" hidden></div></div>`;
+        <input type="file" id="importFile" accept=".json" hidden></div></div>
+    <div class="widget"><div class="w-label">🤖 AI 도우미</div>${aiSettingsHTML()}</div>`;
   main.appendChild(wrap);
 }
 
@@ -887,11 +1035,16 @@ document.addEventListener("click", e => {
     if (shown + 1 >= rungs.length) { sh.disabled = true; sh.textContent = "힌트 모두 사용"; }
     return;
   }
+  const cc = t.closest(".confchip"); if (cc) { const card = cc.closest(".card"); if (card && !card.classList.contains("done")) { $$(".confchip", cc.closest(".confrow")).forEach(x => x.classList.remove("on")); cc.classList.add("on"); } return; }
+  const fb = t.closest("[data-aifb]"); if (fb) { runAiFeedback(fb); return; }
+  const ask = t.closest("[data-ask]"); if (ask) { askAboutQuestion(ask.dataset.ask); return; }
   // 액션(대시보드/리포트)
   const actEl = t.closest("[data-act]"); if (actEl) { handleAct(actEl.dataset.act, actEl.dataset.concept, actEl.dataset.n); return; }
   if (t.id === "clearConcept") { F.concept = ""; render(); return; }
   if (t.id === "exportBtn") { exportProgress(); return; }
   if (t.id === "importBtn") { $("#importFile").click(); return; }
+  if (t.id === "saveExamDate") { const v = ($("#examDateInput") || {}).value || ""; S.examDate = v; save(); renderDashboard(); toast(v ? "시험일을 설정했습니다" : "시험일을 비웠습니다"); return; }
+  if (t.id === "aiCtxClear") { chatCtxId = null; chatCtxBar(); return; }
   const mr = t.closest("[data-review]"); if (mr) { F = { ch: "all", type: "all", st: "all", q: "", concept: "" }; _scrollTo = mr.dataset.review; syncFilterUI(); setView("learn"); return; }
 });
 // 키보드 접근성: 보기에서 Enter/Space로 선택
@@ -916,15 +1069,16 @@ function syncFilterUI() {
 }
 // 진도 백업
 function exportProgress() {
-  const blob = new Blob([JSON.stringify({ v: 2, prog: S.prog, bm: S.bm, activity: S.activity, at: now() })], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ v: 2, prog: S.prog, bm: S.bm, activity: S.activity, expl: S.expl, examDate: S.examDate, at: now() })], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "python-study-progress.json"; a.click();
   toast("진도를 내보냈습니다");
 }
 document.addEventListener("change", e => {
   if (e.target.id === "cramChk") { S.cram = e.target.checked; save(); render(); }
+  if (e.target.dataset && e.target.dataset.expl != null) { S.expl[e.target.dataset.expl] = e.target.value; save(); }   // 자기설명 자동 저장(blur 시)
   if (e.target.id === "importFile") {
     const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-    rd.onload = () => { try { const d = JSON.parse(rd.result); if (d && typeof d === "object" && d.prog && typeof d.prog === "object" && !Array.isArray(d.prog)) { S.prog = d.prog; S.bm = (d.bm && typeof d.bm === "object") ? d.bm : {}; S.activity = (d.activity && typeof d.activity === "object") ? d.activity : (S.activity || {}); save(); toast("진도를 복원했습니다"); render(); } else toast("올바른 백업 파일이 아닙니다"); } catch (x) { toast("파일을 읽을 수 없습니다"); } };
+    rd.onload = () => { try { const d = JSON.parse(rd.result); if (d && typeof d === "object" && d.prog && typeof d.prog === "object" && !Array.isArray(d.prog)) { S.prog = d.prog; S.bm = (d.bm && typeof d.bm === "object") ? d.bm : {}; S.activity = (d.activity && typeof d.activity === "object") ? d.activity : (S.activity || {}); S.expl = (d.expl && typeof d.expl === "object") ? d.expl : (S.expl || {}); if (typeof d.examDate === "string") S.examDate = d.examDate; save(); toast("진도를 복원했습니다"); render(); } else toast("올바른 백업 파일이 아닙니다"); } catch (x) { toast("파일을 읽을 수 없습니다"); } };
     rd.readAsText(f);
   }
 });
@@ -951,6 +1105,7 @@ try {
   if (vw && ["learn", "review", "predict", "dashboard", "cheat", "exam"].includes(vw)) S.view = vw;
   syncFilterUI();
   setView(S.view || "learn");
+  initChatPanel();
 } catch (e) {
   var em = $("#main"); if (em) em.innerHTML = '<div class="empty">⚠ 화면을 그리는 중 오류가 발생했습니다:<br><br><code>' + esc(String((e && e.message) || e)) + '</code><br><br>이 메시지를 캡처해 보내주시면 바로 고쳐드리겠습니다.</div>';
 }
