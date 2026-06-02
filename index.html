@@ -56,12 +56,16 @@
   <div id="aiCtxBar"></div>
   <div id="aiThread"></div>
   <form id="aiForm">
-    <textarea id="aiInput" rows="2" placeholder="파이썬·문제에 대해 물어보세요 (Enter 전송)"></textarea>
+    <div id="aiAttach" hidden></div>
+    <textarea id="aiInput" rows="2" placeholder="파이썬·문제에 대해 물어보세요 (Enter 전송 · 이미지 붙여넣기 Ctrl+V)"></textarea>
     <div class="ai-compose-bar">
+      <button type="button" id="aiAttachBtn" class="ai-icon-btn" title="이미지 첨부(붙여넣기 가능)" aria-label="이미지 첨부">📎</button>
+      <input type="file" id="aiFile" accept="image/*" hidden>
       <div class="ai-model-pick">
         <button type="button" id="aiModelBtn" class="ai-model-btn" aria-haspopup="listbox" aria-expanded="false"><span id="aiModelCur"></span><span class="ai-chev">▾</span></button>
         <div id="aiModelMenu" class="ai-model-menu" role="listbox" hidden></div>
       </div>
+      <button type="button" id="aiThinkBtn" class="ai-think-btn" hidden title="DeepSeek 사고(thinking) 모드 켜기/끄기">🧠 사고</button>
       <span class="ai-spacer"></span>
       <button id="aiSend" class="btn" type="submit">전송</button>
     </div>
