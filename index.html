@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐍 멘토링 파이썬 기말 — 인터랙티브 학습</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">🐍 파이썬 기말 <span class="brand-sub">인터랙티브 학습</span></div>
+  <div class="topctrl">
+    <input id="search" type="search" placeholder="🔍 문제·해설 검색…" autocomplete="off">
+    <button id="themeBtn" title="다크/라이트">🌙</button>
+  </div>
+  <div id="progwrap"><div id="progbar"></div><span id="progtext"></span></div>
+</header>
+
+<nav id="filters">
+  <div class="frow" id="chapFilter"></div>
+  <div class="frow">
+    <div class="seg" id="typeFilter">
+      <button data-type="all" class="on">전체유형</button>
+      <button data-type="obj">객관식</button>
+      <button data-type="sub">주관식</button>
+    </div>
+    <div class="seg" id="statusFilter">
+      <button data-st="all" class="on">전체</button>
+      <button data-st="unseen">안 푼 것</button>
+      <button data-st="wrong">틀린 것</button>
+      <button data-st="bookmark">★ 북마크</button>
+    </div>
+    <button id="resetBtn" class="ghost" title="진도·기록 초기화">⟲ 기록 초기화</button>
+  </div>
+</nav>
+
+<main id="main"></main>
+
+<div id="toast"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
