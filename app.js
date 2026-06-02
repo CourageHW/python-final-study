@@ -198,42 +198,78 @@ async function runAiFeedback(btn) {
   if (!aiConfigured()) { out.innerHTML = `<div class="ai-note">🤖 AI 기능이 아직 설정되지 않았습니다(관리자 설정 필요).</div>`; return; }
   btn.disabled = true; const old = btn.textContent; btn.textContent = "🤖 생각 중…";
   out.innerHTML = `<div class="ai-note">AI가 설명을 평가하는 중…</div>`;
-  try { const r = await aiChat([{ role: "system", content: AI_SYS }, { role: "user", content: explPrompt(q, expl) }]); out.innerHTML = `<div class="ai-fb"><div class="ai-fb-h">🤖 AI 피드백</div>${mdLite(r)}</div>`; }
+  try { const r = await aiChat([{ role: "system", content: AI_SYS }, { role: "user", content: explPrompt(q, expl) }]); out.innerHTML = `<div class="ai-fb ai-rich"><div class="ai-fb-h">🤖 AI 피드백</div>${mdRender(r)}</div>`; }
   catch (e) { out.innerHTML = `<div class="ai-err">⚠ ${esc(String((e && e.message) || e))}</div>`; }
   finally { btn.disabled = false; btn.textContent = old; }
 }
 
 /* ---------- 🤖 AI 채팅 패널 (상시 도우미) ---------- */
 let CHAT = [], chatCtxId = null, chatBusy = false;
-function openChat() { const p = $("#aichat"); if (p) { p.classList.add("open"); const i = $("#aiInput"); if (i) i.focus(); } }
-function closeChat() { const p = $("#aichat"); if (p) p.classList.remove("open"); }
-function toggleChat() { const p = $("#aichat"); if (p) { p.classList.toggle("open"); if (p.classList.contains("open")) { const i = $("#aiInput"); if (i) i.focus(); } } }
+function openChat() { const p = $("#aichat"), bg = $("#aichatBg"); if (p) { p.classList.add("open"); if (bg) bg.hidden = false; const i = $("#aiInput"); if (i) i.focus(); } }
+function closeChat() { const p = $("#aichat"), bg = $("#aichatBg"); if (p) p.classList.remove("open"); if (bg) bg.hidden = true; }
+function toggleChat() { const p = $("#aichat"); if (p && p.classList.contains("open")) closeChat(); else openChat(); }
 function chatCtxBar() {
   const bar = $("#aiCtxBar"); if (!bar) return;
   if (chatCtxId) { const q = qById(chatCtxId); bar.innerHTML = `<span class="ctx-chip">📌 제${q.ch}장 ${q.num}번 참고 중 <button id="aiCtxClear" aria-label="문제 맥락 해제">✕</button></span>`; }
   else bar.innerHTML = "";
 }
-function mdLite(raw) {              // AI 출력용 경량·안전 마크다운(먼저 이스케이프 → 부분 렌더)
-  let s = esc(raw);                                  // 1) XSS 방지
-  const blocks = [];
-  s = s.replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g, (m, code) => {   // 2) 펜스 코드블록
-    blocks.push(`<pre class="ai-code">${code.replace(/\n+$/, "")}</pre>`);
-    return `@@CB${blocks.length - 1}@@`;
+function mdInline(s) {              // 인라인(이미 esc된 텍스트): 코드/LaTeX/굵게/기울임/취소선/링크
+  const ic = [];
+  s = s.replace(/`([^`]+)`/g, (m, c) => { ic.push(c); return `@@IC${ic.length - 1}@@`; })
+       .replace(/\\\[([\s\S]+?)\\\]/g, (m, x) => { ic.push(x.trim()); return `@@IC${ic.length - 1}@@`; })
+       .replace(/\\\(([\s\S]+?)\\\)/g, (m, x) => { ic.push(x.trim()); return `@@IC${ic.length - 1}@@`; });
+  s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+       .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1<em>$2</em>")
+       .replace(/~~([^~]+?)~~/g, "<del>$1</del>")
+       .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
+  return s.replace(/@@IC(\d+)@@/g, (m, i) => `<code>${ic[+i]}</code>`);
+}
+function mdCodeBlock(lang, raw) {   // 코드블록(언어 라벨+복사버튼, 파이썬은 기존 hi()로 구문강조)
+  lang = (lang || "").toLowerCase();
+  const py = lang === "python" || lang === "py" || lang === "";
+  const body = raw.split("\n").map(l => py ? hi(l) : esc(l)).join("\n");
+  return `<div class="ai-cb" data-code="${esc(raw)}"><div class="ai-cb-top"><span>${esc(lang || "code")}</span><button class="ai-copy" type="button">복사</button></div><pre class="ai-code"><code>${body}</code></pre></div>`;
+}
+function mdRow(line) { return line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim()); }
+function mdRender(raw) {            // AI 출력용 마크다운 → HTML (먼저 esc → XSS 안전). 헤딩/목록/표/인용/코드 지원.
+  const cbs = [];
+  const src = String(raw || "").replace(/```([a-zA-Z0-9_+-]*)[ \t]*\n?([\s\S]*?)```/g, (m, lang, code) => {
+    cbs.push(mdCodeBlock(lang, code.replace(/\n$/, ""))); return `\n@@CB${cbs.length - 1}@@\n`;
   });
-  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (m, x) => `<code>${x.trim()}</code>`)   // 3) LaTeX 델리미터 제거(렌더 불가)
-       .replace(/\\\(([\s\S]+?)\\\)/g, (m, x) => `<code>${x.trim()}</code>`)
-       .replace(/\$\$([\s\S]+?)\$\$/g, (m, x) => `<code>${x.trim()}</code>`)
-       .replace(/\$([^$\n]*[\\^_{][^$\n]*)\$/g, (m, x) => `<code>${x.trim()}</code>`);  // 단일 $는 수식문자 있을 때만
-  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>")                          // 4) 인라인 코드
-       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");               //    굵게
-  s = s.replace(/\n/g, "<br>");                                             // 5) 줄바꿈(코드블록 밖)
-  s = s.replace(/@@CB(\d+)@@/g, (m, i) => blocks[+i]);               // 6) 코드블록 복원
-  return s;
+  const L = src.split("\n"), out = []; let i = 0;
+  const isList = s => /^\s*([-*+]|\d+\.)\s+/.test(s);
+  const isHr = s => /^\s*([-*_])(\s*\1){2,}\s*$/.test(s);
+  let m;
+  while (i < L.length) {
+    const line = L[i];
+    if ((m = line.trim().match(/^@@CB(\d+)@@$/))) { out.push(cbs[+m[1]]); i++; continue; }
+    if (!line.trim()) { i++; continue; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { const t = m[1].length <= 1 ? "h3" : m[1].length === 2 ? "h4" : "h5"; out.push(`<${t}>${mdInline(esc(m[2]))}</${t}>`); i++; continue; }
+    if (isHr(line)) { out.push("<hr>"); i++; continue; }
+    if (/^>\s?/.test(line)) { const b = []; while (i < L.length && /^>\s?/.test(L[i])) { b.push(L[i].replace(/^>\s?/, "")); i++; } out.push(`<blockquote>${mdInline(esc(b.join("\n"))).replace(/\n/g, "<br>")}</blockquote>`); continue; }
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < L.length && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(L[i + 1])) {
+      const head = mdRow(line); i += 2; const rows = [];
+      while (i < L.length && /^\s*\|.*\|\s*$/.test(L[i])) { rows.push(mdRow(L[i])); i++; }
+      out.push(`<div class="ai-tblwrap"><table class="ai-tbl"><thead><tr>${head.map(c => `<th>${mdInline(esc(c))}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${mdInline(esc(c))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`); continue;
+    }
+    if (isList(line)) {
+      const ordered = /^\s*\d+\.\s+/.test(line), items = [];
+      while (i < L.length && isList(L[i])) {
+        items.push(L[i].replace(/^\s*([-*+]|\d+\.)\s+/, "")); i++;
+        while (i < L.length && L[i].trim() && !isList(L[i]) && /^\s+\S/.test(L[i])) { items[items.length - 1] += "\n" + L[i].trim(); i++; }
+      }
+      const tg = ordered ? "ol" : "ul";
+      out.push(`<${tg}>${items.map(it => `<li>${mdInline(esc(it)).replace(/\n/g, "<br>")}</li>`).join("")}</${tg}>`); continue;
+    }
+    const p = []; while (i < L.length && L[i].trim() && !/^@@CB\d+@@$/.test(L[i].trim()) && !/^#{1,6}\s/.test(L[i]) && !/^>\s?/.test(L[i]) && !isList(L[i]) && !isHr(L[i])) { p.push(L[i]); i++; }
+    out.push(`<p>${mdInline(esc(p.join("\n"))).replace(/\n/g, "<br>")}</p>`);
+  }
+  return out.join("");
 }
 function chatRender() {
   const th = $("#aiThread"); if (!th) return;
   if (!CHAT.length) th.innerHTML = `<div class="ai-c-empty">파이썬·문제에 대해 무엇이든 물어보세요.<br>문제 카드의 <b>🤖 질문</b> 버튼을 누르면 그 문제를 바로 가져옵니다.</div>`;
-  else th.innerHTML = CHAT.map(m => `<div class="ai-msg ${m.role}">${m.role === "assistant" ? mdLite(m.content) : esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
+  else th.innerHTML = CHAT.map(m => `<div class="ai-msg ${m.role}${m.role === "assistant" ? " ai-rich" : ""}">${m.role === "assistant" ? mdRender(m.content) : esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
   th.scrollTop = th.scrollHeight;
 }
 function askAboutQuestion(id) { chatCtxId = id; openChat(); chatCtxBar(); const i = $("#aiInput"); if (i) { i.placeholder = "이 문제에 대해 물어보세요"; i.focus(); } }
@@ -264,6 +300,7 @@ function initChatPanel() {
   } else if (mb) mb.innerHTML = "";
   chatRender(); chatCtxBar();
   if (fab) fab.onclick = toggleChat;
+  const bg = $("#aichatBg"); if (bg) bg.onclick = closeChat;
   const cl = $("#aiChatClose"); if (cl) cl.onclick = closeChat;
   const clr = $("#aiChatClear"); if (clr) clr.onclick = () => { CHAT = []; chatCtxId = null; chatRender(); chatCtxBar(); };
   const form = $("#aiForm"); if (form) form.onsubmit = e => { e.preventDefault(); sendChat(); };
@@ -1030,6 +1067,7 @@ let _toastTimer = null;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(_toastTimer); _toastTimer = setTimeout(() => t.classList.remove("show"), 1600); }
 document.addEventListener("click", e => {
   const t = e.target;
+  const cp = t.closest(".ai-copy"); if (cp) { const cb = cp.closest(".ai-cb"); if (cb && navigator.clipboard) navigator.clipboard.writeText(cb.dataset.code || "").then(() => { const o = cp.textContent; cp.textContent = "복사됨!"; setTimeout(() => { cp.textContent = o; }, 1200); }).catch(() => {}); return; }
   const play = t.closest(".play"); if (play) { const id = play.dataset.cw; const a = $("#" + id + "-anim"); if (a) { a.classList.toggle("show"); if (a.classList.contains("show") && ANIM[id].step < 0) animStep(id, 1); } return; }
   const ac = t.closest(".animctl button"); if (ac) { const id = ac.dataset.cw, act = ac.dataset.act; if (act === "next") animStep(id, 1); else if (act === "prev") animStep(id, -1); else if (act === "reset") { ANIM[id].step = -1; if (ANIM[id].timer) { clearInterval(ANIM[id].timer); ANIM[id].timer = null; } animRender(id); } else if (act === "play") animPlay(id, ac); return; }
   const rt = t.closest("[data-retry]"); if (rt) { const id = rt.dataset.retry; const p = S.prog[id]; if (p) { p.status = null; } if (SESSION && SESSION.solved) { SESSION.solved.delete(id); updateSessionProgress(); } save(); rerenderCard(id); updateProgress(); refreshNav(); return; } // 이력(첫시도·박스) 보존, UI만 새로 풀기
