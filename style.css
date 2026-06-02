@@ -478,6 +478,12 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 .ai-icon-btn{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1}
 .ai-icon-btn:hover{border-color:var(--accent)}
 .ai-icon-btn.on{background:var(--bad);border-color:var(--bad);animation:aiBlink 1s steps(1) infinite}
+/* 동그란 음성 버튼(ChatGPT식) + 녹음 펄스 피드백 */
+.ai-voice-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  font-size:17px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;transition:.15s}
+.ai-voice-btn:hover{border-color:var(--accent)}
+.ai-voice-btn.on{background:var(--bad);border-color:var(--bad);color:#fff;animation:voicePulse 1.2s infinite}
+@keyframes voicePulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,.5)}70%{box-shadow:0 0 0 11px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
 /* 🔍 왜 틀렸지 */
 .whybtn{background:var(--badbg);color:var(--bad);border:1px solid var(--bad);margin:4px 6px 4px 0}
 html[data-theme="dark"] .whybtn{background:#3a1414;color:#fca5a5}
