@@ -205,6 +205,47 @@ async function runAiFeedback(btn) {
   finally { btn.disabled = false; btn.textContent = old; }
 }
 
+/* ---------- 🔍 "왜 틀렸지?" 오답 맞춤 설명 ---------- */
+function whyWrongBlock(q) {         // 카드에 붙일 버튼+출력(AI 설정 시에만)
+  if (!aiConfigured()) return "";
+  return `<button class="btn sm whybtn" data-why="${q.id}">🔍 왜 틀렸지? (AI)</button><div class="why-out" data-whyout="${q.id}"></div>`;
+}
+function whyPrompt(q) {
+  const p = S.prog[q.id] || {};
+  let pickStr;
+  if (q.sec === "obj") { const o = (q.options || []).find(x => x.m === p.pick); pickStr = p.pick ? (p.pick + " " + (o ? o.t : "")) : "(선택 안 함)"; }
+  else pickStr = p.pick || "(작성한 답)";
+  const expl = stripHtml(q.explHtml).slice(0, 700);
+  return `[문제]\n${qContext(q, true)}\n[공식 해설 요약]\n${expl}\n\n[학생이 고른(틀린) 답]\n${pickStr}\n\n학생이 왜 이 답을 골랐을지 추측되는 오개념을 콕 집고, 왜 틀렸는지와 정답이 왜 맞는지 짧고 명확하게(3~4문장) 한국어로 설명해줘.`;
+}
+async function runWhyWrong(btn) {
+  const id = btn.dataset.why, q = qById(id), card = btn.closest(".card");
+  const out = card ? $(`[data-whyout="${id}"]`, card) : null; if (!out) return;
+  if (!aiConfigured()) { out.innerHTML = `<div class="ai-note">🤖 AI 기능이 설정되지 않았습니다.</div>`; return; }
+  btn.disabled = true; const o = btn.textContent; btn.textContent = "🔍 분석 중…";
+  out.innerHTML = `<div class="ai-note"><span class="ai-typing"><i></i><i></i><i></i></span></div>`;
+  try { const r = await aiChat([{ role: "system", content: CHAT_SYS }, { role: "user", content: whyPrompt(q) }], { temp: S.temp }); out.innerHTML = `<div class="ai-fb ai-rich"><div class="ai-fb-h">🔍 왜 틀렸을까</div>${mdRender(r)}</div>`; }
+  catch (e) { out.innerHTML = `<div class="ai-err">⚠ ${esc(String((e && e.message) || e))}</div>`; }
+  finally { btn.disabled = false; btn.textContent = o; }
+}
+
+/* ---------- 🎤 음성 입력 (Web Speech API) ---------- */
+let recog = null, recoging = false, recogBase = "";
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = $("#aiVoiceBtn"); if (!btn) return;
+  if (!SR) { btn.style.display = "none"; return; }      // 미지원 브라우저
+  recog = new SR(); recog.lang = "ko-KR"; recog.interimResults = true; recog.continuous = false;
+  recog.onresult = e => { let t = ""; for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript; const inp = $("#aiInput"); if (inp) inp.value = (recogBase ? recogBase + " " : "") + t; };
+  recog.onend = () => { recoging = false; btn.classList.remove("on"); };
+  recog.onerror = () => { recoging = false; btn.classList.remove("on"); };
+  btn.onclick = () => {
+    if (recoging) { try { recog.stop(); } catch (e) {} return; }
+    const inp = $("#aiInput"); recogBase = (inp && inp.value.trim()) || "";
+    try { recog.start(); recoging = true; btn.classList.add("on"); } catch (e) {}
+  };
+}
+
 /* ---------- 🤖 AI 채팅 패널 (상시 도우미) ---------- */
 let CHAT = [], chatCtxId = null, chatBusy = false, pendingImage = null;
 function visionModel() { const g = AI_MODELS.find(m => /^gemini/i.test(m.id)); return g ? g.id : currentModel(); }  // 이미지는 비전 모델(Gemini)로
@@ -406,6 +447,7 @@ function initChatPanel() {
       if (f && /^image\//.test(f.type)) { e.preventDefault(); downscaleImage(f, d => { if (d) { setPendingImage(d); openChat(); } else toast("이미지를 읽지 못했어요"); }); }
     });
   }
+  initVoice();
 }
 
 /* ---------- 문제 카드 (학습·복습 공통) ---------- */
@@ -472,7 +514,7 @@ function revealAnswer(card, q, pick) {
   const sa = $(".subans", card); if (sa) sa.remove();
   const slot = $(".ansslot", card);
   const guess = (ok && S.prog[q.id] && S.prog[q.id].lastConfidence !== false) ? confidenceLink(q) : "";
-  slot.innerHTML = answerBox(q) + retryBtn(q) + guess;
+  slot.innerHTML = answerBox(q) + retryBtn(q) + guess + (!ok && pick != null ? whyWrongBlock(q) : "");
   slot.appendChild(explBox(q));
 }
 function restoreSub(card, q, done) {
@@ -535,7 +577,7 @@ function onSubCheck(card, q) {
     const v = b.dataset.self;
     recordAnswer(q, v !== "wrong", v === "correct", val);
     card.classList.add("done"); card.classList.remove("correct", "wrong"); card.classList.add(v === "wrong" ? "wrong" : "correct");
-    self.querySelector(".selfgrade").innerHTML = "기록됨 — " + (v === "correct" ? "맞음 ✅" : v === "unsure" ? "헷갈림 🤔 (복습 예약)" : "틀림 ❌ (복습 예약)") + " " + retryBtn(q);
+    self.querySelector(".selfgrade").innerHTML = "기록됨 — " + (v === "correct" ? "맞음 ✅" : v === "unsure" ? "헷갈림 🤔 (복습 예약)" : "틀림 ❌ (복습 예약)") + " " + retryBtn(q) + (v === "wrong" ? whyWrongBlock(q) : "");
     updateProgress(); refreshNav();
   });
 }
@@ -1195,6 +1237,7 @@ document.addEventListener("click", e => {
   }
   const cc = t.closest(".confchip"); if (cc) { const card = cc.closest(".card"); if (card && !card.classList.contains("done")) { $$(".confchip", cc.closest(".confrow")).forEach(x => x.classList.remove("on")); cc.classList.add("on"); } return; }
   const fb = t.closest("[data-aifb]"); if (fb) { runAiFeedback(fb); return; }
+  const wy = t.closest("[data-why]"); if (wy) { runWhyWrong(wy); return; }
   const ask = t.closest("[data-ask]"); if (ask) { askAboutQuestion(ask.dataset.ask); return; }
   // 액션(대시보드/리포트)
   const actEl = t.closest("[data-act]"); if (actEl) { handleAct(actEl.dataset.act, actEl.dataset.concept, actEl.dataset.n); return; }

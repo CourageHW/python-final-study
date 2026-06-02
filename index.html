@@ -62,6 +62,7 @@
     <div class="ai-compose-bar">
       <button type="button" id="aiAttachBtn" class="ai-icon-btn" title="이미지 첨부(붙여넣기 가능)" aria-label="이미지 첨부">📎</button>
       <input type="file" id="aiFile" accept="image/*" hidden>
+      <button type="button" id="aiVoiceBtn" class="ai-icon-btn" title="음성 입력" aria-label="음성 입력">🎤</button>
       <div class="ai-model-pick">
         <button type="button" id="aiModelBtn" class="ai-model-btn" aria-haspopup="listbox" aria-expanded="false"><span id="aiModelCur"></span><span class="ai-chev">▾</span></button>
         <div id="aiModelMenu" class="ai-model-menu" role="listbox" hidden></div>
@@ -79,7 +80,7 @@
   window.MENTO_AI_PROXY = "https://mento-ai-one.vercel.app/api/ai";
   window.MENTO_AI_TOKEN = "";   // (선택) 프록시 CLASS_TOKEN을 설정했다면 같은 값
   // 멘티가 고를 수 있는 모델 목록 — 워커의 ALLOWED_MODELS와 일치.
-  window.MENTO_AI_MODELS = [{ id: "gpt-5.4-nano", label: "GPT-5.4 nano (OpenAI)" }, { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" }, { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }];
+  window.MENTO_AI_MODELS = [{ id: "gpt-5.4-nano", label: "GPT-5.4 nano (OpenAI)" }, { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" }, { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }, { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" }];
 </script>
 <script src="data.js"></script>
 <script src="app.js"></script>

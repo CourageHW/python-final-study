@@ -477,6 +477,11 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 /* 첨부(📎)·thinking·이미지 */
 .ai-icon-btn{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1}
 .ai-icon-btn:hover{border-color:var(--accent)}
+.ai-icon-btn.on{background:var(--bad);border-color:var(--bad);animation:aiBlink 1s steps(1) infinite}
+/* 🔍 왜 틀렸지 */
+.whybtn{background:var(--badbg);color:var(--bad);border:1px solid var(--bad);margin:4px 6px 4px 0}
+html[data-theme="dark"] .whybtn{background:#3a1414;color:#fca5a5}
+.why-out:not(:empty){margin-top:8px}
 #aiAttach{margin-bottom:6px}
 #aiAttach[hidden]{display:none}
 .att-thumb{position:relative;display:inline-block}
