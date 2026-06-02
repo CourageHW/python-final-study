@@ -263,3 +263,36 @@ html[data-theme="dark"] .tg.diff-어려움{background:#3a1414;color:#fca5a5}
 .missrow:hover{border-color:var(--accent)}
 .mini-tag{background:var(--chip);color:var(--accent2);padding:1px 6px;border-radius:6px;font-size:11px;font-weight:700}
 @media(max-width:620px){.dash-row{grid-template-columns:1fr}#nav{top:92px}#filters{top:auto}.exam-bar{top:0}}
+
+/* ===== 통계 차트 ===== */
+.chart{width:100%;height:auto;display:block}
+.chart .cl{font-size:9px;fill:var(--muted)}
+.stackbar{display:flex;height:18px;border-radius:9px;overflow:hidden;background:var(--line);margin:6px 0 10px}
+.stackbar span{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.chbar i.okbar{background:var(--ok)} .chbar i.warnbar{background:#d97706} .chbar i.badbar{background:var(--bad)}
+
+/* ===== 코드리뷰 반영: 접근성·대비·모바일 ===== */
+:root{ --muted:#556070; }                         /* 라이트 본문 보조텍스트 대비 ↑ (WCAG) */
+/* 다크모드 버튼 대비 확보(흰 글씨 위 충분한 어두운 파랑) */
+html[data-theme="dark"] .btn,
+html[data-theme="dark"] .cta,
+html[data-theme="dark"] .seg button.on,
+html[data-theme="dark"] .exam-bar{ background:#2563eb; color:#fff; }
+html[data-theme="dark"] .chip.on{ background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
+/* 키보드 포커스 표시 */
+button:focus-visible, a:focus-visible, input:focus-visible,
+.opt:focus-visible, [tabindex]:focus-visible, summary:focus-visible{
+  outline:3px solid var(--accent); outline-offset:2px; border-radius:6px;
+}
+/* 모바일: sticky 겹침 방지 — 상단바·네비·필터는 일반 흐름, 시험바만 고정 */
+@media(max-width:620px){
+  #topbar, #nav, #filters{ position:static; top:auto; }
+  .exam-bar{ position:sticky; top:0; }
+}
+/* 모션 최소화 선호 존중 */
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}

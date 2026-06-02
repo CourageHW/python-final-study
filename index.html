@@ -10,8 +10,8 @@
 <header id="topbar">
   <div class="brand">🐍 파이썬 기말 <span class="brand-sub">인터랙티브 학습</span></div>
   <div class="topctrl">
-    <input id="search" type="search" placeholder="🔍 문제·해설 검색…" autocomplete="off">
-    <button id="themeBtn" title="다크/라이트">🌙</button>
+    <input id="search" type="search" placeholder="🔍 문제·해설 검색…" autocomplete="off" aria-label="문제·해설 검색">
+    <button id="themeBtn" title="다크/라이트" aria-label="다크/라이트 모드 전환">🌙</button>
   </div>
   <div id="progwrap"><div id="progbar"></div><span id="progtext"></span></div>
 </header>
@@ -47,5 +47,10 @@
 <div id="toast"></div>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
+</script>
 </body>
 </html>

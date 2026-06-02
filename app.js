@@ -21,9 +21,11 @@ try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (
 // v1 -> v2 마이그레이션
 try { if (!localStorage.getItem(KEY)) { const v1 = JSON.parse(localStorage.getItem("pyquiz_v1") || "{}");
   if (v1.prog) { S.prog = v1.prog; S.bm = v1.bm || {}; S.theme = v1.theme || "light"; } } } catch (e) {}
-S.prog = S.prog || {}; S.bm = S.bm || {};
+S.prog = S.prog || {}; S.bm = S.bm || {}; S.activity = S.activity || {};
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const now = () => Date.now();
+function todayStr() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function logActivity(correct) { const t = todayStr(); const a = S.activity[t] = S.activity[t] || { a: 0, c: 0 }; a.a++; if (correct) a.c++; }
 
 /* ---------- SRS (5박스 Leitner) ---------- */
 const DAY = 864e5;
@@ -34,6 +36,7 @@ function boxMs(b) { b = Math.max(0, Math.min(5, b)); return (S.cram ? CRAM_MS : 
 function recordAnswer(q, correct, confident, pick) {
   const p = S.prog[q.id] || { box: 0, attempts: 0, firstTry: null, lapses: 0 };
   if (!p.attempts) p.firstTry = !!correct;       // 첫 시도 정답 여부(대시보드용, 한 번만)
+  logActivity(!!correct);
   p.attempts = (p.attempts || 0) + 1;
   p.status = correct ? "correct" : "wrong";
   p.pick = pick; p.lastResult = !!correct; p.lastConfidence = !!confident; p.lastAt = now();
@@ -43,10 +46,11 @@ function recordAnswer(q, correct, confident, pick) {
   p.dueAt = now() + boxMs(p.box);
   S.prog[q.id] = p; save();
 }
-function markGuessed(q) {                          // "사실 찍었어요" → 승급 취소
+function markGuessed(q) {                          // "사실 찍었어요" → 승급 취소 + 즉시 복습
   const p = S.prog[q.id]; if (!p) return;
   p.lastConfidence = false; p.box = Math.max(1, (p.box || 1) - 1);
-  p.dueAt = now() + boxMs(p.box); save();
+  if (p.attempts <= 1) p.firstTry = false;         // 찍어서 맞힌 건 첫시도 정답으로 치지 않음
+  p.dueAt = now(); save();                          // 약속대로 바로 복습 큐에
 }
 function isDue(id) { const p = S.prog[id]; return p && p.box >= 1 && (p.dueAt || 0) <= now(); }
 function dueList() {
@@ -126,7 +130,7 @@ function animRender(id) {
   if (st.line) { const ln = pre.querySelector(`.ln[data-l="${st.line}"]`); if (ln) ln.classList.add(st.error ? "errln" : "active"); }
   const vk = Object.keys(st.vars || {});
   $("#" + id + "-vars").innerHTML = vk.length
-    ? vk.map(k => `<div class="v${prev.vars[k] !== st.vars[k] ? " chg" : ""}"><span class="vk">${esc(k)}</span>=<span>${esc(st.vars[k])}</span></div>`).join("")
+    ? vk.map(k => `<div class="v${(prev.vars || {})[k] !== st.vars[k] ? " chg" : ""}"><span class="vk">${esc(k)}</span>=<span>${esc(st.vars[k])}</span></div>`).join("")
     : '<span class="nochg">(아직 변수 없음)</span>';
   const ob = $("#" + id + "-out"); ob.textContent = st.out || "";
   if (st.error) ob.innerHTML += `<span class="err">⚠ ${esc(st.error)}</span>`;
@@ -155,10 +159,10 @@ function tagChips(q) {
 function cardHTML(q) {
   const star = S.bm[q.id] ? "on" : "";
   const badge = q.sec === "sub" ? `<span class="badge sub">주관식</span>` : `<span class="badge">객관식</span>`;
-  const opts = q.options.map(o => `<li class="opt" data-m="${esc(o.m)}"><span class="m">${esc(o.m)}</span><span>${esc(o.t)}</span></li>`).join("");
+  const opts = q.options.map(o => `<li class="opt" data-m="${esc(o.m)}" role="button" tabindex="0"><span class="m">${esc(o.m)}</span><span>${esc(o.t)}</span></li>`).join("");
   return `<div class="card" id="q-${q.id}" data-id="${q.id}">
     <div class="qhead">${badge}<span class="badge">제${q.ch}장 · ${q.num}번</span>${tagChips(q)}<span class="sp"></span>
-      <button class="star ${star}" data-star="${q.id}" title="북마크">★</button></div>
+      <button class="star ${star}" data-star="${q.id}" title="북마크" aria-label="북마크 토글">★</button></div>
     <div class="stem">${esc(q.stem)}</div>
     <div class="codeslot"></div>
     ${q.sec === "obj" ? `<ul class="opts">${opts}</ul>` :
@@ -177,8 +181,12 @@ function mountCard(card, q) {
 function answerBox(q) { return `<div class="answer">정답: ${esc(q.answer)} ${esc(q.answerText)}</div>`; }
 function retryBtn(q) { return `<button class="reveal-btn retry" data-retry="${q.id}">🔄 다시 풀기</button>`; }
 function explBox(q) { const d = document.createElement("div"); d.className = "expl"; d.innerHTML = q.explHtml; enhanceBlocks(d, q.codeBlocks); return d; }
+function disposeAnim(root) {  // 제거되는 DOM의 코드위젯 애니 타이머·ANIM 엔트리 정리
+  $$(".play", root).forEach(p => { const id = p.dataset.cw; if (id && ANIM[id]) { if (ANIM[id].timer) clearInterval(ANIM[id].timer); delete ANIM[id]; } });
+}
 function rerenderCard(id) {
   const q = qById(id), old = document.getElementById("q-" + id); if (!q || !old) return;
+  disposeAnim(old);
   const tmp = document.createElement("div"); tmp.innerHTML = cardHTML(q);
   const fresh = tmp.firstElementChild; old.replaceWith(fresh); mountCard(fresh, q);
 }
@@ -208,7 +216,7 @@ function showStudy(card, q) {
   const slot = $(".ansslot", card);
   slot.innerHTML = `<button class="reveal-btn" data-reveal="1">💡 정답·해설 보기</button>`;
   $("[data-reveal]", slot).onclick = () => {
-    card.classList.add("done"); recordAnswer(q, q.answer, false, null); // 그냥 보기 = 미정답 취급(복습 예약)
+    card.classList.add("done"); recordAnswer(q, false, false, null); // 그냥 보기 = 미정답 취급(복습 예약)
     slot.innerHTML = answerBox(q) + retryBtn(q);
     if (q.sec === "obj") markOptions(card, q, null);
     const sa = $(".subans", card); if (sa) sa.remove();
@@ -224,9 +232,12 @@ function onPick(card, q, m) {
   toast(ok ? "정답! 🎉" : "오답 — 해설을 확인하세요");
 }
 function onSubCheck(card, q) {
+  if (card.classList.contains("done")) return;     // 채점 후 재채점 방지
   const inp = $(`[data-sub="${q.id}"]`, card), slot = $(".ansslot", card);
+  const val = inp ? inp.value : "";
+  const sa = $(".subans", card); if (sa) sa.remove();
   const norm = s => (s || "").toLowerCase().replace(/\s+/g, "");
-  const guess = norm(inp.value);
+  const guess = norm(val);
   const auto = guess && (norm(q.answerText).includes(guess) || guess.includes(norm(q.answerText)));
   slot.innerHTML = answerBox(q);
   const self = document.createElement("div");
@@ -238,9 +249,9 @@ function onSubCheck(card, q) {
   slot.appendChild(self); slot.appendChild(explBox(q));
   self.querySelectorAll("[data-self]").forEach(b => b.onclick = () => {
     const v = b.dataset.self;
-    recordAnswer(q, v !== "wrong", v === "correct", inp.value);
+    recordAnswer(q, v !== "wrong", v === "correct", val);
     card.classList.add("done"); card.classList.remove("correct", "wrong"); card.classList.add(v === "wrong" ? "wrong" : "correct");
-    self.querySelector(".selfgrade").innerHTML = "기록됨 — " + (v === "correct" ? "맞음 ✅" : v === "unsure" ? "헷갈림 🤔 (복습 예약)" : "틀림 ❌ (복습 예약)");
+    self.querySelector(".selfgrade").innerHTML = "기록됨 — " + (v === "correct" ? "맞음 ✅" : v === "unsure" ? "헷갈림 🤔 (복습 예약)" : "틀림 ❌ (복습 예약)") + " " + retryBtn(q);
     updateProgress(); refreshNav();
   });
 }
@@ -249,7 +260,7 @@ function onSubCheck(card, q) {
 function updateProgress() {
   const ids = QS.map(q => q.id);
   const done = ids.filter(i => S.prog[i] && S.prog[i].status).length;
-  const correct = ids.filter(i => S.prog[i] && S.prog[i].firstTry).length;
+  const correct = ids.filter(i => S.prog[i] && S.prog[i].status && S.prog[i].firstTry).length;
   const pct = Math.round(done / ids.length * 100);
   $("#progbar").style.width = Math.max(2, pct) + "%";
   $("#progtext").textContent = `진도 ${done}/${ids.length} (${pct}%) · 첫시도 정답 ${correct}`;
@@ -262,6 +273,7 @@ function refreshNav() {
 /* ---------- 필터 + 학습 뷰 ---------- */
 let F = { ch: "all", type: "all", st: "all", q: "", concept: "" };
 let _io = null;
+let _scrollTo = null;
 function match(q) {
   if (F.concept && q.concept !== F.concept) return false;
   if (F.ch !== "all" && q.ch !== +F.ch) return false;
@@ -282,11 +294,19 @@ function emitOp(main, op) {
 }
 function lazyRender(main, ops) {
   let idx = 0; const BATCH = 14;
+  if (!("IntersectionObserver" in window)) { ops.forEach(op => emitOp(main, op)); return; } // 구형 브라우저 폴백
   function more() {
     if (_io) { _io.disconnect(); _io = null; }
     const old = document.getElementById("sentinel"); if (old) old.remove();
     let cards = 0;
     while (idx < ops.length && cards < BATCH) { const op = ops[idx++]; emitOp(main, op); if (op.t === "card") cards++; }
+    // 펜딩 스크롤 타깃: 보이지 않으면 찾을 때까지 배치를 계속 로드
+    if (_scrollTo) {
+      const el = document.getElementById("q-" + _scrollTo);
+      if (el) { el.scrollIntoView({ behavior: "smooth" }); _scrollTo = null; }
+      else if (idx < ops.length) { more(); return; }
+      else _scrollTo = null;
+    }
     if (idx < ops.length) { const s = document.createElement("div"); s.id = "sentinel"; s.style.height = "1px"; main.appendChild(s); _io = new IntersectionObserver(es => { if (es[0].isIntersecting) more(); }, { rootMargin: "800px" }); _io.observe(s); }
   }
   more();
@@ -370,6 +390,36 @@ function readiness(s) {
   return { label: "기초 다지기", cls: "r1", desc: "장별 개념부터 차근차근 풀어보세요." };
 }
 function pct(x) { return x == null ? "—" : Math.round(x * 100) + "%"; }
+function recentDays(n) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(Date.now() - i * 864e5); out.push(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)); } return out; }
+function dailyChartSVG() {
+  const days = recentDays(14), vals = days.map(k => (S.activity[k] || { a: 0 }).a), cor = days.map(k => (S.activity[k] || { c: 0 }).c);
+  const max = Math.max(1, ...vals), W = 300, H = 66, bw = W / 14, gap = 3;
+  let bars = "";
+  days.forEach((k, i) => {
+    const h = vals[i] / max * H, hc = cor[i] / max * H, x = i * bw;
+    bars += `<rect x="${x + gap}" y="${H - h}" width="${bw - gap * 2}" height="${h}" rx="2" fill="var(--line)"/>`;
+    if (hc) bars += `<rect x="${x + gap}" y="${H - hc}" width="${bw - gap * 2}" height="${hc}" rx="2" fill="var(--accent)"/>`;
+  });
+  const tot = vals.reduce((a, b) => a + b, 0);
+  return `<svg viewBox="0 0 ${W} ${H + 14}" class="chart" preserveAspectRatio="none">${bars}
+    <text x="0" y="${H + 12}" class="cl">${days[0].slice(5)}</text>
+    <text x="${W}" y="${H + 12}" class="cl" text-anchor="end">오늘</text></svg>
+    <div class="muted" style="margin-top:4px">최근 14일 ${tot}문항 풀이 · 막대=시도, 진한색=정답</div>`;
+}
+function boxDistHTML() {
+  const boxes = [0, 0, 0, 0, 0, 0];
+  QS.forEach(q => boxes[(S.prog[q.id] || {}).box || 0]++);
+  const cols = ["#94a3b8", "#ef4444", "#f59e0b", "#eab308", "#84cc16", "#16a34a"];
+  const tot = QS.length;
+  return `<div class="stackbar">${boxes.map((v, i) => v ? `<span style="width:${v / tot * 100}%;background:${cols[i]}" title="${BOX_NAME[i]} ${v}"></span>` : "").join("")}</div>
+    <div class="legend">${boxes.map((v, i) => `<span><i style="background:${cols[i]}"></i>${BOX_NAME[i]} ${v}</span>`).join("")}</div>`;
+}
+function difficultyHTML() {
+  const dif = {}; QS.forEach(q => { const p = S.prog[q.id]; if (!p || !p.status) return; const d = q.difficulty || "기타"; const e = dif[d] = dif[d] || { a: 0, c: 0 }; e.a++; if (p.firstTry) e.c++; });
+  const order = ["쉬움", "보통", "어려움"];
+  const rows = order.filter(d => dif[d]).map(d => { const e = dif[d], acc = e.c / e.a; const cls = acc >= 0.8 ? "ok" : acc >= 0.5 ? "warn" : "bad"; return `<div class="chrow"><span class="chname">${d}</span><span class="chbar"><i style="width:${Math.round(acc * 100)}%" class="${cls}bar"></i></span><span class="chnum">${e.c}/${e.a}</span><span class="chacc ${cls}">${pct(acc)}</span></div>`; });
+  return rows.length ? rows.join("") : `<div class="muted">아직 푼 문제가 없습니다.</div>`;
+}
 function renderDashboard() {
   const main = $("#main"); main.innerHTML = "";
   const s = stat(), r = readiness(s), due = dueList().length;
@@ -405,6 +455,11 @@ function renderDashboard() {
     <div class="widget"><div class="w-label">실수 유형 <span class="w-hint">(어떤 사고가 막히는지)</span></div>
       ${s.skillMiss.length ? s.skillMiss.map(([k, v]) => `<div class="skrow"><span>${esc(k)}</span><span class="skbar"><i style="width:${Math.min(100, v * 12)}%"></i></span><span class="sknum">${v}</span></div>`).join("")
       : `<div class="muted">틀린 문제가 쌓이면 여기 실수 유형이 분석됩니다.</div>`}</div>
+    <div class="widget"><div class="w-label">📈 일별 학습량</div>${dailyChartSVG()}</div>
+    <div class="dash-row">
+      <div class="widget"><div class="w-label">🧩 학습 단계 분포 <span class="w-hint">(복습 안정도)</span></div>${boxDistHTML()}</div>
+      <div class="widget"><div class="w-label">🎚️ 난이도별 정답률 <span class="w-hint">(첫시도)</span></div>${difficultyHTML()}</div>
+    </div>
     <div class="widget backup"><div class="w-label">진도 백업</div>
       <div class="muted">진도는 이 브라우저에만 저장됩니다. 기기를 바꾸거나 초기화 전에 백업하세요.</div>
       <div class="bkbtns"><button class="btn sm" id="exportBtn">⬇ 내보내기(.json)</button>
@@ -415,21 +470,21 @@ function renderDashboard() {
 
 /* ---------- 모의시험 ---------- */
 const PRESETS = { quick: { n: 18, t: 20, label: "빠른 진단 (18문항 · 20분)" }, standard: { n: 36, t: 45, label: "표준 모의 (36문항 · 45분)" }, full: { n: 60, t: 75, label: "실전 모의 (60문항 · 75분)" } };
-function seeded(seed) { let x = seed >>> 0; return () => (x = (x * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function seeded(seed) { let x = seed >>> 0 || 1; return () => (x = (x * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function shuffle(arr, rnd) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; } return arr; }
 function pickExam(n) {
-  const rnd = seeded(((now() / 1000) | 0));
+  const rnd = seeded(now() & 0x7fffffff);
   const perCh = Math.max(1, Math.round(n / CH.length));
   const picked = [];
   CH.forEach(c => {
-    let pool = QS.filter(q => q.ch === c.ch);
-    // 개념 균형: 개념별로 섞어 뽑기
+    const pool = QS.filter(q => q.ch === c.ch && q.sec === "obj"); // 자동채점 위해 객관식만
     const byCon = {}; pool.forEach(q => (byCon[q.concept] = byCon[q.concept] || []).push(q));
-    const cons = Object.keys(byCon); cons.forEach(k => byCon[k].sort(() => rnd() - 0.5));
+    const cons = Object.keys(byCon); cons.forEach(k => shuffle(byCon[k], rnd));
     let i = 0; const take = [];
     while (take.length < perCh && cons.some(k => byCon[k].length)) { const k = cons[i % cons.length]; if (byCon[k].length) take.push(byCon[k].pop()); i++; }
     picked.push(...take);
   });
-  picked.sort(() => rnd() - 0.5);
+  shuffle(picked, rnd);
   return picked.slice(0, n).map(q => q.id);
 }
 function startExam(preset) {
@@ -451,7 +506,7 @@ function renderExam() {
   ex.ids.forEach((id, k) => {
     const q = qById(id);
     const div = document.createElement("div"); div.className = "card exam-card"; div.id = "ex-" + id; div.dataset.id = id;
-    const opts = q.sec === "obj" ? `<ul class="opts">${q.options.map(o => `<li class="opt" data-m="${esc(o.m)}"><span class="m">${esc(o.m)}</span><span>${esc(o.t)}</span></li>`).join("")}</ul>`
+    const opts = q.sec === "obj" ? `<ul class="opts">${q.options.map(o => `<li class="opt" data-m="${esc(o.m)}" role="button" tabindex="0"><span class="m">${esc(o.m)}</span><span>${esc(o.t)}</span></li>`).join("")}</ul>`
       : `<div class="subans"><input type="text" placeholder="답 입력…" data-exsub="${id}"></div>`;
     div.innerHTML = `<div class="qhead"><span class="badge">${k + 1}.</span><span class="badge ${q.sec === "sub" ? "sub" : ""}">제${q.ch}장</span><span class="sp"></span>
       <button class="flagbtn ${ex.flags[id] ? "on" : ""}" data-flag="${id}">🚩 검토</button></div>
@@ -514,7 +569,7 @@ function renderExamReport() {
   const wrap = document.createElement("div"); wrap.className = "dash";
   wrap.innerHTML = `<div class="widget"><div class="w-label">📝 시험 결과</div>
       <div class="score-big">${score}<span>점</span></div>
-      <div class="muted">객관식 ${correct}/${objs.length} 정답 · 주관식 ${subCnt}문항(직접 확인) · ${usedMin}분 사용</div></div>
+      <div class="muted">${objs.length}문항 중 ${correct}문항 정답${subCnt ? ` · 주관식 ${subCnt}문항(직접 확인)` : ""} · ${usedMin}분 사용</div></div>
     <div class="widget"><div class="w-label">장별 성적</div>${Object.keys(chAgg).map(Number).sort((a,b)=>a-b).map(ch => { const e = chAgg[ch]; const acc = e.o ? e.c / e.o : null; const cls = acc == null ? "" : acc >= 0.8 ? "ok" : acc >= 0.5 ? "warn" : "bad"; return `<div class="chrow"><span class="chname">제${ch}장</span><span class="chnum">${e.o ? e.c + "/" + e.o : "주관식"}</span><span class="chacc ${cls}">${pct(acc)}</span></div>`; }).join("")}</div>
     <div class="widget"><div class="w-label">틀린 문제 (${wrong.length}) — 복습 큐에 추가됨</div>
       ${wrong.length ? wrong.map(r => { const q = qById(r.id); return `<button class="missrow" data-review="${r.id}"><span class="badge">제${q.ch}장</span> ${esc(q.stem.slice(0, 48))}… <span class="mini-tag">${esc(q.concept)}</span></button>`; }).join("") : `<div class="muted">객관식 전부 정답! 🎉</div>`}
@@ -535,6 +590,10 @@ function setView(v) {
   render();
 }
 function render() {
+  // 렌더 정리: 이전 애니메이션 타이머·옵저버·센티넬 해제(누수/유령 콜백 방지)
+  for (const k in ANIM) { if (ANIM[k].timer) clearInterval(ANIM[k].timer); delete ANIM[k]; }
+  if (_io) { _io.disconnect(); _io = null; }
+  const sen = document.getElementById("sentinel"); if (sen) sen.remove();
   refreshNav(); updateProgress();
   if (S.view === "learn") renderLearn();
   else if (S.view === "review") renderReview();
@@ -543,13 +602,14 @@ function render() {
 }
 
 /* ---------- 이벤트 ---------- */
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
+let _toastTimer = null;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(_toastTimer); _toastTimer = setTimeout(() => t.classList.remove("show"), 1600); }
 document.addEventListener("click", e => {
   const t = e.target;
   const play = t.closest(".play"); if (play) { const id = play.dataset.cw; const a = $("#" + id + "-anim"); if (a) { a.classList.toggle("show"); if (a.classList.contains("show") && ANIM[id].step < 0) animStep(id, 1); } return; }
   const ac = t.closest(".animctl button"); if (ac) { const id = ac.dataset.cw, act = ac.dataset.act; if (act === "next") animStep(id, 1); else if (act === "prev") animStep(id, -1); else if (act === "reset") { ANIM[id].step = -1; if (ANIM[id].timer) { clearInterval(ANIM[id].timer); ANIM[id].timer = null; } animRender(id); } else if (act === "play") animPlay(id, ac); return; }
-  const rt = t.closest("[data-retry]"); if (rt) { const id = rt.dataset.retry; delete S.prog[id]; save(); rerenderCard(id); updateProgress(); refreshNav(); return; }
-  const gl = t.closest("[data-guess]"); if (gl) { const id = gl.dataset.guess; markGuessed(qById(id)); gl.outerHTML = '<span class="guess-done">🤔 찍음으로 표시됨 — 복습에 추가했어요</span>'; refreshNav(); return; }
+  const rt = t.closest("[data-retry]"); if (rt) { const id = rt.dataset.retry; const p = S.prog[id]; if (p) { p.status = null; } save(); rerenderCard(id); updateProgress(); refreshNav(); return; } // 이력(첫시도·박스) 보존, UI만 새로 풀기
+  const gl = t.closest("[data-guess]"); if (gl) { const id = gl.dataset.guess; markGuessed(qById(id)); gl.outerHTML = '<span class="guess-done">🤔 찍음으로 표시됨 — 복습에 추가했어요</span>'; updateProgress(); refreshNav(); return; }
   const star = t.closest("[data-star]"); if (star) { const id = star.dataset.star; S.bm[id] = !S.bm[id]; if (!S.bm[id]) delete S.bm[id]; save(); star.classList.toggle("on"); if (F.st === "bookmark" && S.view === "learn") render(); return; }
   // 시험 카드 선택
   if (S.view === "exam" && S.exam && !S.exam.submitted) {
@@ -567,7 +627,11 @@ document.addEventListener("click", e => {
   if (t.id === "clearConcept") { F.concept = ""; render(); return; }
   if (t.id === "exportBtn") { exportProgress(); return; }
   if (t.id === "importBtn") { $("#importFile").click(); return; }
-  const mr = t.closest("[data-review]"); if (mr) { F.concept = ""; setView("learn"); setTimeout(() => { const el = document.getElementById("q-" + mr.dataset.review); if (el) el.scrollIntoView(); }, 100); return; }
+  const mr = t.closest("[data-review]"); if (mr) { F = { ch: "all", type: "all", st: "all", q: "", concept: "" }; _scrollTo = mr.dataset.review; syncFilterUI(); setView("learn"); return; }
+});
+// 키보드 접근성: 보기에서 Enter/Space로 선택
+document.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target && e.target.classList && e.target.classList.contains("opt")) { e.preventDefault(); e.target.click(); }
 });
 function handleAct(act, concept) {
   if (act === "go-review") setView("review");
@@ -582,7 +646,7 @@ function syncFilterUI() {
 }
 // 진도 백업
 function exportProgress() {
-  const blob = new Blob([JSON.stringify({ v: 2, prog: S.prog, bm: S.bm, at: now() })], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ v: 2, prog: S.prog, bm: S.bm, activity: S.activity, at: now() })], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "python-study-progress.json"; a.click();
   toast("진도를 내보냈습니다");
 }
@@ -590,7 +654,7 @@ document.addEventListener("change", e => {
   if (e.target.id === "cramChk") { S.cram = e.target.checked; save(); render(); }
   if (e.target.id === "importFile") {
     const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-    rd.onload = () => { try { const d = JSON.parse(rd.result); if (d.prog) { S.prog = d.prog; S.bm = d.bm || {}; save(); toast("진도를 복원했습니다"); render(); } else toast("올바른 백업 파일이 아닙니다"); } catch (x) { toast("파일을 읽을 수 없습니다"); } };
+    rd.onload = () => { try { const d = JSON.parse(rd.result); if (d && typeof d === "object" && d.prog && typeof d.prog === "object" && !Array.isArray(d.prog)) { S.prog = d.prog; S.bm = (d.bm && typeof d.bm === "object") ? d.bm : {}; S.activity = (d.activity && typeof d.activity === "object") ? d.activity : (S.activity || {}); save(); toast("진도를 복원했습니다"); render(); } else toast("올바른 백업 파일이 아닙니다"); } catch (x) { toast("파일을 읽을 수 없습니다"); } };
     rd.readAsText(f);
   }
 });
