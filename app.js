@@ -313,13 +313,20 @@ async function sendChat() {
 function initChatPanel() {
   const fab = $("#aiFab"), panel = $("#aichat");
   if (!aiConfigured()) { if (fab) fab.style.display = "none"; if (panel) panel.style.display = "none"; return; }
-  const sel = $("#aiModelSel");
-  if (sel) {
-    if (AI_MODELS.length > 1) {
-      const cur = currentModel();
-      sel.innerHTML = AI_MODELS.map(m => `<option value="${esc(m.id)}"${m.id === cur ? " selected" : ""}>${esc(m.label)}</option>`).join("");
-      sel.style.display = ""; sel.onchange = () => { S.model = sel.value; save(); };
-    } else sel.style.display = "none";
+  const pick = $(".ai-model-pick"), mbtn = $("#aiModelBtn"), menu = $("#aiModelMenu"), curEl = $("#aiModelCur");
+  if (pick) {
+    if (AI_MODELS.length > 1 && mbtn && menu && curEl) {
+      pick.style.display = "";
+      const setLabel = () => { const m = AI_MODELS.find(x => x.id === currentModel()); curEl.textContent = m ? m.label : "모델"; };
+      setLabel();
+      menu.innerHTML = AI_MODELS.map(m => `<button type="button" class="ai-model-item${m.id === currentModel() ? " on" : ""}" data-mid="${esc(m.id)}" role="option">${esc(m.label)}</button>`).join("");
+      mbtn.onclick = () => { const open = menu.hidden; menu.hidden = !open; mbtn.setAttribute("aria-expanded", String(open)); };
+      menu.querySelectorAll(".ai-model-item").forEach(it => it.onclick = () => {
+        S.model = it.dataset.mid; save(); setLabel();
+        menu.querySelectorAll(".ai-model-item").forEach(x => x.classList.toggle("on", x.dataset.mid === S.model));
+        menu.hidden = true; mbtn.setAttribute("aria-expanded", "false");
+      });
+    } else pick.style.display = "none";
   }
   chatRender(); chatCtxBar();
   if (fab) fab.onclick = toggleChat;
@@ -1090,6 +1097,7 @@ let _toastTimer = null;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(_toastTimer); _toastTimer = setTimeout(() => t.classList.remove("show"), 1600); }
 document.addEventListener("click", e => {
   const t = e.target;
+  const _mm = $("#aiModelMenu"); if (_mm && !_mm.hidden && !t.closest(".ai-model-pick")) _mm.hidden = true;   // 모델 메뉴 바깥 클릭 시 닫기
   const cp = t.closest(".ai-copy"); if (cp) { const cb = cp.closest(".ai-cb"); if (cb && navigator.clipboard) navigator.clipboard.writeText(cb.dataset.code || "").then(() => { const o = cp.textContent; cp.textContent = "복사됨!"; setTimeout(() => { cp.textContent = o; }, 1200); }).catch(() => {}); return; }
   const play = t.closest(".play"); if (play) { const id = play.dataset.cw; const a = $("#" + id + "-anim"); if (a) { a.classList.toggle("show"); if (a.classList.contains("show") && ANIM[id].step < 0) animStep(id, 1); } return; }
   const ac = t.closest(".animctl button"); if (ac) { const id = ac.dataset.cw, act = ac.dataset.act; if (act === "next") animStep(id, 1); else if (act === "prev") animStep(id, -1); else if (act === "reset") { ANIM[id].step = -1; if (ANIM[id].timer) { clearInterval(ANIM[id].timer); ANIM[id].timer = null; } animRender(id); } else if (act === "play") animPlay(id, ac); return; }
