@@ -486,6 +486,18 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 .ai-think-btn[hidden]{display:none}
 .ai-think-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .msg-img{display:block;max-width:240px;max-height:200px;border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,255,255,.25)}
+/* 설정(온도) 패널 */
+#aiSettings{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--bg)}
+#aiSettings[hidden]{display:none}
+.ai-set-row{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--ink)}
+.ai-set-row label{flex-shrink:0}
+.ai-set-row input[type=range]{flex:1;accent-color:var(--accent)}
+#aiTempVal{width:30px;text-align:right;color:var(--accent2);font-variant-numeric:tabular-nums}
+.ai-set-hint{font-size:11.5px;color:var(--muted);margin-top:5px}
+/* 드래그앤드롭 하이라이트 */
+#aichat.dragging{outline:3px dashed var(--accent);outline-offset:-6px}
+#aichat.dragging::after{content:"여기에 이미지를 놓으세요";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(37,99,235,.12);color:var(--accent2);font-weight:800;font-size:16px;pointer-events:none;z-index:5}
 .ai-c-foot{padding:0 14px 12px;font-size:11px;color:var(--muted)}
 @media(max-width:620px){
   #aichat{width:100vw;height:100dvh;max-width:none;border-radius:0;left:0;top:0;transform:none}
